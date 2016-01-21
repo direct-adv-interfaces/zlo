@@ -25,6 +25,8 @@ module.exports = Zlo;
  * @constructor
  */
 function Zlo(params) {
+    params = params || {};
+
     var cwd = process.cwd(),
         configJSON = params.configJSON ?
             params.configJSON :
@@ -35,20 +37,20 @@ function Zlo(params) {
     if (!configJSON.storage || !configJSON.storage.local) {
         console.error('Empty local storage path');
         process.exit(0);
+    } else {
+        this.config = {
+            json: configJSON,
+            mdHash: mdHash,
+            cacheDirectory: path.resolve(cwd, configJSON.storage.local),
+            cacheFileName: cacheFileName,
+            cachePath: path.resolve(configJSON.storage.local, cacheFileName),
+            svn: configJSON.storage.svn
+        };
+
+        this.svnClient = new SvnClient({
+            cwd: configJSON.storage.local
+        });
     }
-
-    this.config = {
-        json: configJSON,
-        mdHash: mdHash,
-        cacheDirectory: path.resolve(cwd, configJSON.storage.local),
-        cacheFileName: cacheFileName,
-        cachePath: path.resolve(configJSON.storage.local, cacheFileName),
-        svn: configJSON.storage.svn
-    };
-
-    this.svnClient = new SvnClient({
-        cwd: configJSON.storage.local
-    });
 }
 
 /**
