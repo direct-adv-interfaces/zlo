@@ -17,10 +17,18 @@ var CONFIG_NAME = 'zlo.json',
 
 module.exports = Zlo;
 
-function Zlo() {
+/**
+ *
+ * @param params
+ * @param params.configJSON {JSON} config json
+ * @param params.configPath {String} path to config json
+ * @constructor
+ */
+function Zlo(params) {
     var cwd = process.cwd(),
-        configPath = path.resolve(cwd, CONFIG_NAME),
-        configJSON = fs.readJsonSync(configPath),
+        configJSON = params.configJSON ?
+            params.configJSON :
+            fs.readJsonSync(path.resolve(cwd, params.configName || CONFIG_NAME)),
         mdHash = md5(JSON.stringify(configJSON)),
         cacheFileName = mdHash + '.tar.gz';
 
@@ -30,7 +38,6 @@ function Zlo() {
     }
 
     this.config = {
-        path: configPath,
         json: configJSON,
         mdHash: mdHash,
         cacheDirectory: path.resolve(cwd, configJSON.storage.local),
