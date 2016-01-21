@@ -1,0 +1,20 @@
+{
+  "name": "zlo",
+  "version": "0.0.1",
+  "main": "./cli.js",
+  "author": "heliarian",
+  "dependencies": {
+    "bower": "1.7.2",
+    "commander": "2.5.0",
+    "decompress": "3.0.0",
+    "fs-extra": "0.26.2",
+    "lodash": "3.10.1",
+    "md5": "2.0.0",
+    "svn-spawn": "0.1.4",
+    "tar.gz": "1.0.2"
+  },
+  "devDependencies": {
+    "chai": "^3.4.1",
+    "mocha": "^2.3.4"
+  }
+}
