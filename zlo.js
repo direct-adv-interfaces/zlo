@@ -117,66 +117,61 @@ Zlo.prototype.killMD5 = function () {
         client = this.svnClient;
 
     console.log('Clear  ' + config.cacheFileName + ' cache from svn');
+    client.del([config.svn + '/' + config.cacheFileName, '-m zlo: remove direct cache'], function(err, data) {
+        if (err) {
+            console.log(error);
+        } else {
+            console.log(data);
+        }
+    });
+
     fs.removeSync(config.cacheDirectory);
 
-    client.checkout([config.svn, '.', '--depth', 'empty'], function(err, data) {
+};
+
+Zlo.prototype._checkoutSVN = function(depth, callback) {
+    var client = this.svnClient,
+        config = this.config;
+
+    client.checkout([config.svn, '.', '--depth', depth], function(err, data) {
         if (err) {
             console.error(err);
-            process.exit(0);
+            callback(err, data);
         } else {
-            client.update([config.cacheFileName], function(err, data) {
-                if (err) {
-                    console.error(err);
-                    process.exit(0);
-                }
-                if (fs.existsSync(config.cachePath)) {
-                    client.cmd(['rm', config.cacheFileName], function(err, data) {
-                        if (err) {
-                            console.error(err);
-                            process.exit(0);
-                        }
-                        client.commit('zlo: remove direct cache', function(err, data) {
-                            if (err) {
-                                console.error(err);
-                                process.exit(0);
-                            }
-                            fs.removeSync(config.cacheDirectory);
-                        });
-                    });
-                } else {
-                    console.log('nothing to remove')
-                }
-            });
+            callback(err, data);
         }
     });
 };
 
 Zlo.prototype.killAll = function () {
-    var client = this.svnClient;
+    var client = this.svnClient,
+        config = this.config,
+        local = this.config.json.storage.local;
 
-    fs.removeSync(config.cacheDirectory);
-
-    client.checkout([config.svn, '.'], function(err, data) {
-        if (err) {
-            console.error(err);
-            process.exit(0);
-        } else {
-            client.cmd(['rm', '*'], function(err, data) {
+    this._checkoutSVN(
+        'immediates',
+        function(err) {
+            if (err) {
+                process.exit(0);
+            }
+            process.chdir(local);
+            //client.del не работает корректно с аргументом *
+            exec('svn rm *', function(err, stout) {
                 if (err) {
                     console.error(err);
-                    process.exit(0);
+                } else {
+                    exec('svn commit -m "zlo: remove all direct cache"', function(err, stout) {
+                        if (err) {
+                            console.error(err);
+                            process.exit(0);
+                        }
+                        console.log('local changes has been committed!');
+                        fs.removeSync(config.cacheDirectory);
+                    });
                 }
-                client.commit('zlo: remove all direct cache', function(err, data) {
-                    if (err) {
-                        console.error(err);
-                        process.exit(0);
-                    }
-                    console.log('local changes has been committed!');
-                    fs.removeSync(config.cacheDirectory);
-                });
             });
         }
-    });
+    );
 };
 
 Zlo.prototype.createArchiveFolder = function(tmpPath) {
@@ -293,6 +288,7 @@ Zlo.prototype.putToSvn = function() {
     });
 };
 
+
 /**
  * Заргрузка зависимостей всеми доступными способами
  */
@@ -303,15 +299,13 @@ Zlo.prototype.loadDependencies = function() {
     //т.к. чекаутим только один файл (или вообще ни одного, если файла с данным md5 нет) то нет смысла отдельно проверять
     //существование локального кэша
     console.log('--------CHECKOUT SVN ----- ');
-    this.svnClient.checkout([config.svn, '.', '--depth', 'empty'], function(err, data) {
-        if (err) {
-            console.error(err);
-            process.exit(0);
-        } else {
-            self.svnClient.update([config.cacheFileName], function(err, data) {
+
+    this._checkoutSVN(
+        'empty',
+        function(err, data) {
+            if (err) {
                 if (err) {
                     console.error(err);
-                    process.exit(0);
                 }
                 if (fs.existsSync(config.cachePath)) {
                     console.log('----EXTRACT FROM SVN CACHE----');
@@ -320,7 +314,21 @@ Zlo.prototype.loadDependencies = function() {
                     //идем за данными  в сеть
                     self.loadFromNet();
                 }
-            });
+            } else {
+                self.svnClient.update([config.cacheFileName], function(err, data) {
+                    if (err) {
+                        console.error(err);
+                    }
+                    if (fs.existsSync(config.cachePath)) {
+                        console.log('----EXTRACT FROM SVN CACHE----');
+                        self.extractDependencies();
+                    } else {
+                        //идем за данными  в сеть
+                        self.loadFromNet();
+                    }
+                });
+            }
+
         }
-    });
+    );
 };
