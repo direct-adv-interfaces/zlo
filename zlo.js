@@ -8,6 +8,7 @@ var CONFIG_NAME = 'zlo.json',
     BOWER_STORAGE = 'libs',
 
     md5 = require('md5'),
+    Promise = require('promise'),
     fs = require('fs-extra'),
     exec = require('child_process').exec,
     targz = require('tar.gz'),
@@ -54,6 +55,20 @@ function Zlo(params) {
 }
 
 /**
+ * Сreate bower config - .bowerrc
+ */
+Zlo.prototype.createBowerRC = function() {
+    var cwd = process.cwd(),
+        config = this.config,
+        bowerrc = {
+            directory: BOWER_STORAGE,
+            postinstall: config.json.postinstall
+        };
+
+    fs.writeJson(path.resolve(cwd, '.bowerrc'), bowerrc);
+};
+
+/**
  * Создаем json-файлы для работы bower и npm
  */
 Zlo.prototype.createLoadingConfigs = function() {
@@ -71,6 +86,8 @@ Zlo.prototype.createLoadingConfigs = function() {
     });
 
     bowerJSON.resolutions = config.json.resolutions;
+
+    this.createBowerRC();
 
     fs.writeJson(path.resolve(cwd, NPM_CONFIG_NAME), npmJSON);
     fs.writeJson(path.resolve(cwd, BOWER_CONFIG_NAME), bowerJSON);
@@ -162,47 +179,74 @@ Zlo.prototype.killAll = function () {
     });
 };
 
-/**
- * Архивирование зависимостей
- */
-Zlo.prototype.archiveDependencies = function() {
-    var cwd = process.cwd(),
-        config = this.config,
-        tmpPath = 'tmp-' + config.mdHash,
-        self = this;
+Zlo.prototype.createArchiveFolder = function(tmpPath) {
+    var promises = [],
+        cwd = process.cwd();
 
-    fs.mkdirsSync(tmpPath);
     console.log('--- create folder for archive --- ');
+
+    //убеждаемся что искомая папка есть, если надо - чистим ее
+    fs.emptydirSync(tmpPath);
+
     try {
         [NPM_STORAGE, BOWER_STORAGE].forEach(function(name) {
-            var filePath = path.resolve(cwd, name),
-                toPath = path.resolve(tmpPath, name);
-            console.log(filePath + ' copy to ' + toPath);
-            if (!fs.existsSync(filePath)) {
-                console.error(filePath + ' not found');
-                process.exit(0);
-            } else {
-                fs.copySync(filePath, toPath);
-            }
+            promises.push(new Promise(function(resolve, reject) {
+                var filePath = path.resolve(cwd, name),
+                    toPath = path.resolve(tmpPath, name);
+
+                console.log(filePath + ' copy to ' + toPath);
+                if (!fs.existsSync(filePath)) {
+                    console.error(filePath + ' not found');
+                    reject();
+                    process.exit(0);
+                } else {
+                    fs.copy(filePath, toPath, function(err) {
+                        if (err) {
+                            console.error('File copy error', err);
+                            reject();
+                        } else {
+                            console.log('copy ' + filePath + ' to ' + toPath + ' success');
+                            resolve();
+                        }
+                    });
+                }
+            }));
+
         });
     } catch (e) {
         console.error('archiveDependencies: file copy error ' + e);
     }
-    console.log('--- archiveDependencies --- ');
-    new targz().compress(
-        tmpPath,
-        config.cachePath,
-        function onCompressed(compressErr) {
-            fs.removeSync(tmpPath);
 
-            if (compressErr) {
-                console.error('archiveDependencies: error - ' + compressErr);
-            } else {
-                console.log('archiveDependencies: success');
-                self.putToSvn();
+    return promises;
+
+};
+
+/**
+ * Архивирование зависимостей
+ */
+Zlo.prototype.archiveDependencies = function() {
+    var config = this.config,
+        tmpPath = 'archive-' + config.mdHash,
+        self = this,
+        promises = this.createArchiveFolder(tmpPath);
+
+    Promise.all(promises).then(function() {
+        console.log('--- archiveDependencies --- ');
+        new targz().compress(
+            tmpPath,
+            config.cachePath,
+            function onCompressed(compressErr) {
+                fs.removeSync(tmpPath);
+
+                if (compressErr) {
+                    console.error('archiveDependencies: error - ' + compressErr);
+                } else {
+                    console.log('archiveDependencies: success');
+                    self.putToSvn();
+                }
             }
-        }
-    );
+        );
+    });
 };
 
 Zlo.prototype.extractDependencies = function() {
