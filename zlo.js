@@ -102,14 +102,18 @@ Zlo.prototype.loadFromNet = function () {
 
     this.createLoadingConfigs();
 
-    console.log('------LOAD FROM NET------ ');
+    console.log('------LOAD FROM NET------ '); 
+    console.log('npm install');
     exec('npm install', function(err, stdout) {
 	if (err) {
             console.error(err);
             process.exit(0);
         }
         console.log('------NPM INSTALL FINISHED ------');
-        exec('bower install', function(err, stdout) {
+
+	var bowerPath = path.resolve(__dirname, 'node_modules/bower/bin/bower');
+        console.log(bowerPath + ' install');
+	exec(bowerPath + ' install', function(err, stdout) {
 	    if (err) {
 		console.error(err);
 		process.exit(0);
