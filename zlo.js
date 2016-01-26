@@ -347,10 +347,18 @@ Zlo.prototype.onLoadSuccess = function() {
     console.log('onLoadSuccess');
     var cwd = process.cwd();
 
-    fs.removeSync(path.resolve(cwd, '.bowerrc'));
-    fs.removeSync(path.resolve(cwd, NPM_CONFIG_NAME));
-    fs.removeSync(path.resolve(cwd, BOWER_CONFIG_NAME));
-    console.log(this._postinstall);
+    fs.remove(path.resolve(cwd, '.bowerrc'), function(err) {
+        if (err) console.error(err);
+    });
+    fs.remove(path.resolve(cwd, NPM_CONFIG_NAME), function(err) {
+        if (err) console.error(err);
+    });
+    fs.remove(path.resolve(cwd, BOWER_CONFIG_NAME), function(err) {
+        if (err) console.error(err);
+    });
+
+    console.log('this._postinstall', this._postinstall);
+
     if (this._postinstall && this._postinstall.length > 0) {
         Promise.all(this._postinstall.map(function(postinstall) {
             return new Promise(function(resolve, reject) {
@@ -393,10 +401,14 @@ Zlo.prototype.loadDependencies = function() {
                 }
                 if (fs.existsSync(config.cachePath)) {
                     console.log('----EXTRACT FROM SVN CACHE----');
-                    Promise.all(self.putToSvn(), self.extractDependencies()).then(self.onLoadSuccess);
+                    Promise.all(self.putToSvn(), self.extractDependencies()).then(function() {
+                        self.onLoadSuccess();
+                    });
                 } else {
                     //идем за данными  в сеть
-                    self.loadFromNet().then(self.onLoadSuccess);
+                    self.loadFromNet().then(function() {
+                        self.onLoadSuccess();
+                    });
                 }
             } else {
                 self.svnClient.update([config.cacheFileName], function(err, data) {
@@ -405,10 +417,14 @@ Zlo.prototype.loadDependencies = function() {
                     }
                     if (fs.existsSync(config.cachePath)) {
                         console.log('------EXTRACT FROM SVN CACHE------');
-                        self.extractDependencies().then(self.onLoadSuccess);
+                        self.extractDependencies().then(function() {
+                            self.onLoadSuccess();
+                        });
                     } else {
                         //идем за данными  в сеть
-                        self.loadFromNet().then(self.onLoadSuccess);
+                        self.loadFromNet().then(function() {
+                            self.onLoadSuccess();
+                        });
                     }
                 });
             }
