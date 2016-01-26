@@ -2,8 +2,6 @@ var program = require('commander'),
     Zlo = require('./zlo'),
     zlo = new Zlo();
 
-console.log('run cli');
-
 program
    .option('--kill', 'Clear current md5-cache from local storage and svn')
    .option('--kill-all', 'Clear all md5-caches from local storage and svn')
