@@ -23,6 +23,7 @@
              "local": "./bem-local-libs/",
              "svn": "svn+ssh://svn.yandex.ru/direct-bem-local-libs"
          },
+	"postinstall": "npm install && npm run postinstall",
          "resolutions": {
              "bem-bl": "2.5.1",
              "romochka": "~2.10.27"
@@ -43,11 +44,13 @@
      }
 
 ```
+postinstall - скрипты postinstall, которые необходимо выполнить
 storage.local - папка для хранения локального кэша
 storage.svn - папка с svn-репозиторием в котором хранится кэш
 dependencies - зависимости
 Зависимости с type: git/svn подкачиваются bower'ом
 resolutions - рекомендации для bower'а по разрешению зависимостей
+
 
 ##Roadmap & known issues##
 Если скрипт молча падает и при этом не отрабатывает bower (не подкачиваются bower_components)
