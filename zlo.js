@@ -217,7 +217,7 @@ Zlo.prototype.archiveDependencies = function() {
                 tmpPath,
                 config.cachePath,
                 function onCompressed(compressErr) {
-                    fs.removeSync(tmpPath);
+                    //fs.removeSync(tmpPath);
                     if (compressErr) {
                         reject();
                         console.error('archiveDependencies: error - ' + compressErr);
@@ -305,7 +305,7 @@ Zlo.prototype.extractDependencies = function() {
 
                         Promise.all(promises).then(function() {
                             console.log('extractDependencies: done ' + config.cachePath);
-                            fs.removeSync(tmpPath);
+                            //fs.removeSync(tmpPath);
                             resolve();
                         });
                     }
