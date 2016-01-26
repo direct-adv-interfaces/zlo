@@ -102,11 +102,11 @@ Zlo.prototype.loadFromNet = function () {
 
     this.createLoadingConfigs();
 
-    console.log('------LOAD FROM NET--- ');
+    console.log('------LOAD FROM NET------ ');
     exec('npm install', function() {
-        console.log('--- NPM INSTALL FINISHED ----- ');
+        console.log('------NPM INSTALL FINISHED ------');
         exec('bower install', function() {
-            console.log('--- BOWER INSTALL FINISHED ----- ');
+            console.log('------BOWER INSTALL FINISHED------');
             self.archiveDependencies();
         });
     });
@@ -116,10 +116,10 @@ Zlo.prototype.killMD5 = function () {
     var config = this.config,
         client = this.svnClient;
 
-    console.log('Clear  ' + config.cacheFileName + ' cache from svn');
+    console.log('Clear  ' + config.svn + '/' + config.cacheFileName + ' cache from svn');
     client.del([config.svn + '/' + config.cacheFileName, '-m zlo: remove direct cache'], function(err, data) {
         if (err) {
-            console.log(error);
+            console.log(err);
         } else {
             console.log(data);
         }
@@ -298,7 +298,7 @@ Zlo.prototype.loadDependencies = function() {
 
     //т.к. чекаутим только один файл (или вообще ни одного, если файла с данным md5 нет) то нет смысла отдельно проверять
     //существование локального кэша
-    console.log('--------CHECKOUT SVN ----- ');
+    console.log('------CHECKOUT SVN------');
 
     this._checkoutSVN(
         'empty',
