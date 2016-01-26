@@ -1,0 +1,13 @@
+{
+    "undef": true,
+    "globals": {
+        "require": false,
+        "process": false,
+        "error": false,
+        "module": false,
+        "console": false,
+        "window": false
+    },
+
+    "indent": 4
+}

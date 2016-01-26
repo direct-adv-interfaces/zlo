@@ -1,30 +1,31 @@
 {
-  "name": "zlo",
-  "version": "0.0.1",
-  "main": "./cli.js",
-  "author": "heliarian",
-  "description": "is a command line utility for caching dependencies",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/heliarian/zlo.git"
-  },
-  "dependencies": {
-    "bower": "^1.7.2",
-    "commander": "2.5.0",
-    "decompress": "3.0.0",
-    "fs-extra": "^0.26.3",
-    "lodash": "3.10.1",
-    "md5": "2.0.0",
-    "svn-spawn": "0.1.4",
-    "promise": "^7.1.1",
-    "tar.gz": "1.0.2"
-  },
-  "devDependencies": {
-    "chai": "^3.4.1",
-    "mocha": "^2.3.4",
-    "sinon": "^1.17.2"
-  },
-  "scripts": {
-    "test": "node ./node_modules/mocha/bin/mocha test/common"
-  }
+    "name": "zlo",
+    "version": "0.0.1",
+    "main": "./cli.js",
+    "author": "heliarian",
+    "description": "is a command line utility for caching dependencies",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/heliarian/zlo.git"
+    },
+    "dependencies": {
+        "bower": "^1.7.2",
+        "commander": "2.5.0",
+        "decompress": "3.0.0",
+        "fs-extra": "^0.26.3",
+        "lodash": "3.10.1",
+        "md5": "2.0.0",
+        "svn-spawn": "0.1.4",
+        "promise": "^7.1.1",
+        "tar.gz": "1.0.2"
+    },
+    "devDependencies": {
+        "chai": "^3.4.1",
+        "jshint": "2.3.0",
+        "mocha": "^2.3.4",
+        "sinon": "^1.17.2"
+    },
+    "scripts": {
+        "test": "node ./node_modules/mocha/bin/mocha test/common"
+    }
 }

@@ -79,7 +79,7 @@ Zlo.prototype.createLoadingConfigs = function() {
 
     config.json.dependencies.forEach(function(dep) {
         if (dep.type == 'git' || dep.type == 'svn') {
-            bowerJSON.dependencies[dep.name] = dep.repo + '#' + dep.commit
+            bowerJSON.dependencies[dep.name] = dep.repo + '#' + dep.commit;
         } else {
             npmJSON.dependencies[dep.name] = dep.version;
         }
@@ -107,8 +107,8 @@ Zlo.prototype.loadFromNet = function () {
         console.log('--- NPM INSTALL FINISHED ----- ');
         exec('bower install', function() {
             console.log('--- BOWER INSTALL FINISHED ----- ');
-            self.archiveDependencies()
-        })
+            self.archiveDependencies();
+        });
     });
 };
 
