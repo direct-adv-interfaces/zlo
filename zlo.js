@@ -116,17 +116,14 @@ Zlo.prototype.killMD5 = function () {
     var config = this.config,
         client = this.svnClient;
 
-    console.log('Clear  ' + config.svn + '/' + config.cacheFileName + ' cache from svn');
-    client.del([config.svn + '/' + config.cacheFileName, '-m zlo: remove direct cache'], function(err, data) {
+    client.del([config.svn + '/' + config.cacheFileName, '-m', '"zlo: remove direct cache"'], function(err, data) {
         if (err) {
             console.log(err);
         } else {
             console.log(data);
+            fs.removeSync(config.cacheDirectory);
         }
     });
-
-    fs.removeSync(config.cacheDirectory);
-
 };
 
 Zlo.prototype._checkoutSVN = function(depth, callback) {
@@ -174,20 +171,56 @@ Zlo.prototype.killAll = function () {
     );
 };
 
-Zlo.prototype.createArchiveFolder = function(tmpPath) {
+
+/**
+ * Архивирование зависимостей
+ */
+Zlo.prototype.archiveDependencies = function() {
+    var config = this.config,
+        tmpPath = 'archive-' + config.mdHash,
+        self = this,
+        promises = this.archiveFolderAction('move-to', tmpPath);
+
+    Promise.all(promises).then(function() {
+        console.log('--- archiveDependencies --- ');
+        new targz().compress(
+            tmpPath,
+            config.cachePath,
+            function onCompressed(compressErr) {
+                fs.removeSync(tmpPath);
+
+                if (compressErr) {
+                    console.error('archiveDependencies: error - ' + compressErr);
+                } else {
+                    console.log('archiveDependencies: success');
+                    self.putToSvn();
+                }
+            }
+        );
+    });
+};
+
+Zlo.prototype.archiveFolderAction = function(action, tmpPath) {
     var promises = [],
         cwd = process.cwd();
 
-    console.log('--- create folder for archive --- ');
 
-    //убеждаемся что искомая папка есть, если надо - чистим ее
-    fs.emptydirSync(tmpPath);
+    if (action == 'move-to') {
+        //убеждаемся что искомая папка есть, если надо - чистим ее
+        fs.emptydirSync(tmpPath);
+    } else {
+        //убеждаемся что искомая папка есть
+        if (!fs.existsSync(tmpPath)) {
+            console.error('folder ' + tmpPath + ' not found');
+            process.exit(0);
+        }
+    }
 
     try {
         [NPM_STORAGE, BOWER_STORAGE].forEach(function(name) {
             promises.push(new Promise(function(resolve, reject) {
-                var filePath = path.resolve(cwd, name),
-                    toPath = path.resolve(tmpPath, name);
+                var filePath = action == 'move-to' ? path.resolve(cwd, name) : path.resolve(tmpPath, name),
+                    toPath =  action == 'move-to' ? path.resolve(tmpPath, name) : path.resolve(cwd, name);
 
                 console.log(filePath + ' copy to ' + toPath);
                 if (!fs.existsSync(filePath)) {
@@ -209,45 +242,20 @@ Zlo.prototype.createArchiveFolder = function(tmpPath) {
 
         });
     } catch (e) {
-        console.error('archiveDependencies: file copy error ' + e);
+        console.error('archiveFolderAction: file copy error ' + e);
     }
 
     return promises;
-
 };
 
 /**
- * Архивирование зависимостей
+ * Извлекаем зависимости из архива
  */
-Zlo.prototype.archiveDependencies = function() {
-    var config = this.config,
-        tmpPath = 'archive-' + config.mdHash,
-        self = this,
-        promises = this.createArchiveFolder(tmpPath);
-
-    Promise.all(promises).then(function() {
-        console.log('--- archiveDependencies --- ');
-        new targz().compress(
-            tmpPath,
-            config.cachePath,
-            function onCompressed(compressErr) {
-                fs.removeSync(tmpPath);
-
-                if (compressErr) {
-                    console.error('archiveDependencies: error - ' + compressErr);
-                } else {
-                    console.log('archiveDependencies: success');
-                    self.putToSvn();
-                }
-            }
-        );
-    });
-};
-
 Zlo.prototype.extractDependencies = function() {
-    var config = this.config;
+    var config = this.config,
+        self = this;
 
-    console.log('---EXTRACT DEPENDENCIES-- ' + config.cacheFileName);
+    console.log('------EXTRACT DEPENDENCIES------' + config.cacheFileName + ' to ' + process.cwd());
 
     new Decompress()
         .src(config.cachePath)
@@ -258,7 +266,13 @@ Zlo.prototype.extractDependencies = function() {
                 if (extractErr) {
                     console.error('extractDependencies: error ' + config.cachePath + ': ' + extractErr);
                 } else {
-                    console.log('extractDependencies: done ' + config.cachePath);
+                    var tmpPath = 'archive-' + config.mdHash,
+                        promises = self.archiveFolderAction('move-from', tmpPath);
+
+                    Promise.all(promises).then(function() {
+                        console.log('extractDependencies: done ' + config.cachePath);
+                        fs.removeSync(tmpPath);
+                    });
                 }
             }
         );
@@ -320,7 +334,7 @@ Zlo.prototype.loadDependencies = function() {
                         console.error(err);
                     }
                     if (fs.existsSync(config.cachePath)) {
-                        console.log('----EXTRACT FROM SVN CACHE----');
+                        console.log('------EXTRACT FROM SVN CACHE------');
                         self.extractDependencies();
                     } else {
                         //идем за данными  в сеть
