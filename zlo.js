@@ -103,9 +103,17 @@ Zlo.prototype.loadFromNet = function () {
     this.createLoadingConfigs();
 
     console.log('------LOAD FROM NET------ ');
-    exec('npm install', function() {
+    exec('npm install', function(err, stdout) {
+	if (err) {
+            console.error(err);
+            process.exit(0);
+        }
         console.log('------NPM INSTALL FINISHED ------');
-        exec('bower install', function() {
+        exec('bower install', function(err, stdout) {
+	    if (err) {
+		console.error(err);
+		process.exit(0);
+	    }
             console.log('------BOWER INSTALL FINISHED------');
             self.archiveDependencies();
         });
