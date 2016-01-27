@@ -11,10 +11,9 @@ var CONFIG_NAME = 'zlo.json',
     Promise = require('promise'),
     fs = require('fs-extra'),
     exec = require('child_process').exec,
-    targz = require('tar.gz'),
     path = require('path'),
     SvnClient = require('svn-spawn'),
-    Decompress = require('decompress');
+    tar = require('tar-fs');
 
 module.exports = Zlo;
 
@@ -33,7 +32,7 @@ function Zlo(params) {
             params.configJSON :
             fs.readJsonSync(path.resolve(cwd, params.configName || CONFIG_NAME)),
         mdHash = md5(JSON.stringify(configJSON)),
-        cacheFileName = mdHash + '.tar.gz';
+        cacheFileName = mdHash + '.tar';
 
     this._postinstall = [];
 
@@ -45,8 +44,20 @@ function Zlo(params) {
             json: configJSON,
             mdHash: mdHash,
             cacheDirectory: path.resolve(cwd, configJSON.storage.local),
-            cacheFileName: cacheFileName,
-            cachePath: path.resolve(configJSON.storage.local, cacheFileName),
+            paths: [
+                {
+                    type: 'npm',
+                    folderPath: NPM_STORAGE,
+                    cachePath: path.resolve(configJSON.storage.local, NPM_STORAGE + '_' + cacheFileName),
+                    cacheName: NPM_STORAGE + '_' + cacheFileName
+                },
+                {
+                    type: 'bower',
+                    folderPath: BOWER_STORAGE,
+                    cachePath: path.resolve(configJSON.storage.local, BOWER_STORAGE + '_' + cacheFileName),
+                    cacheName: BOWER_STORAGE + '_' + cacheFileName
+                }
+            ],
             svn: configJSON.storage.svn
         };
 
@@ -205,112 +216,57 @@ Zlo.prototype._getArchiveFolderPath = function() {
  * Архивирование зависимостей
  */
 Zlo.prototype.archiveDependencies = function() {
-    var config = this.config,
-        tmpPath = this._getArchiveFolderPath(),
-        self = this,
-        promises = this.archiveFolderAction('move-to', tmpPath);
 
-    return new Promise(function(resolve, reject) {
-        Promise.all(promises).then(function() {
-            console.log('--- archiveDependencies --- ');
-            new targz().compress(
-                tmpPath,
-                config.cachePath,
-                function onCompressed(compressErr) {
-                    //fs.removeSync(tmpPath);
-                    if (compressErr) {
-                        reject();
-                        console.error('archiveDependencies: error - ' + compressErr);
-                    } else {
-                        console.log('archiveDependencies: success');
-                        self.putToSvn().then(resolve);
-                    }
-                }
-            );
+    console.log('archiveDependencies: start');
+
+    var config = this.config,
+        cwd = process.cwd(),
+        paths = config.paths,
+        self = this;
+
+    return new Promise(function(resolve) {
+        var promisesArray = paths.map(function(currentPath) {
+            return new Promise(function(resolve) {
+                tar.pack(path.resolve(cwd, currentPath.folderPath)).pipe(fs.createWriteStream(currentPath.cachePath))
+                    .on('finish', function() {
+                        console.log('archiveDependencies: finish ' + currentPath.folderPath);
+                        resolve()
+                    });
+            })
+        });
+
+        Promise.all(promisesArray).then(function() {
+            console.log('archiveDependencies: finish all');
+            self.putToSvn().then(resolve);
         });
     });
-
 };
 
-Zlo.prototype.archiveFolderAction = function(action, tmpPath) {
-    var promises = [],
-        cwd = process.cwd();
-
-
-    if (action == 'move-to') {
-        //убеждаемся что искомая папка есть, если надо - чистим ее
-        fs.emptydirSync(tmpPath);
-    } else {
-        //убеждаемся что искомая папка есть
-        if (!fs.existsSync(tmpPath)) {
-            console.error('folder ' + tmpPath + ' not found');
-            process.exit(0);
-        }
-    }
-
-    try {
-        [NPM_STORAGE, BOWER_STORAGE].forEach(function(name) {
-            promises.push(new Promise(function(resolve, reject) {
-                var filePath = action == 'move-to' ? path.resolve(cwd, name) : path.resolve(tmpPath, name),
-                    toPath =  action == 'move-to' ? path.resolve(tmpPath, name) : path.resolve(cwd, name);
-
-                console.log(filePath + ' copy to ' + toPath);
-                if (!fs.existsSync(filePath)) {
-                    console.error(filePath + ' not found');
-                    reject();
-                    process.exit(0);
-                } else {
-                    fs.copy(filePath, toPath, function(err) {
-                        if (err) {
-                            console.error('File copy error', err);
-                            reject();
-                        } else {
-                            console.log('copy ' + filePath + ' to ' + toPath + ' success');
-                            resolve();
-                        }
-                    });
-                }
-            }));
-
-        });
-    } catch (e) {
-        console.error('archiveFolderAction: file copy error ' + e);
-    }
-
-    return promises;
-};
 
 /**
  * Извлекаем зависимости из архива
  */
 Zlo.prototype.extractDependencies = function() {
     var config = this.config,
-        self = this;
+        paths = config.paths;
 
-    console.log('------EXTRACT DEPENDENCIES------' + config.cacheFileName + ' to ' + process.cwd());
+    console.log('extractDependencies - starts');
 
-    return new Promise(function(resolve, reject) {
-        new Decompress()
-            .src(config.cachePath)
-            .dest(process.cwd())
-            .use(Decompress.targz())
-            .run(
-                function onExtracted(extractErr) {
-                    if (extractErr) {
-                        console.error('extractDependencies: error ' + config.cachePath + ': ' + extractErr);
-                        reject();
-                    } else {
-                        var tmpPath = self._getArchiveFolderPath(),
-                            promises = self.archiveFolderAction('move-from', tmpPath);
+    return new Promise(function(resolve) {
+        var promisesArray = paths.map(function(currentPath) {
+            return new Promise(function(resolve) {
+                fs.createReadStream(currentPath.cachePath).pipe(tar.extract(currentPath.folderPath + '_1'))
+                    .on('finish', function() {
+                        console.log('extractDependencies: finish ' + currentPath.folderPath);
+                        resolve();
+                    })
+            })
+        });
 
-                        Promise.all(promises).then(function() {
-                            console.log('extractDependencies: done ' + config.cachePath);
-                            //fs.removeSync(tmpPath);
-                            resolve();
-                        });
-                    }
-                }
-            );
+        Promise.all(promisesArray).then(function() {
+            console.log('extractDependencies: finish all');
+            resolve();
+        });
     });
 
 };
@@ -399,7 +355,7 @@ Zlo.prototype.loadDependencies = function() {
                 if (err) {
                     console.error(err);
                 }
-                if (fs.existsSync(config.cachePath)) {
+                if (fs.existsSync(config.paths[0].cachePath) && fs.existsSync(config.paths[1].cachePath)) {
                     console.log('----EXTRACT FROM SVN CACHE----');
                     Promise.all(self.putToSvn(), self.extractDependencies()).then(function() {
                         self.onLoadSuccess();
@@ -411,11 +367,11 @@ Zlo.prototype.loadDependencies = function() {
                     });
                 }
             } else {
-                self.svnClient.update([config.cacheFileName], function(err, data) {
+                self.svnClient.update([config.paths[0].cacheName, config.paths[1].cacheName], function(err, data) {
                     if (err) {
                         console.error(err);
                     }
-                    if (fs.existsSync(config.cachePath)) {
+                    if (fs.existsSync(config.paths[0].cachePath) && fs.existsSync(config.paths[1].cachePath)) {
                         console.log('------EXTRACT FROM SVN CACHE------');
                         self.extractDependencies().then(function() {
                             self.onLoadSuccess();
