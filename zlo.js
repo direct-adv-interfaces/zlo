@@ -255,7 +255,7 @@ Zlo.prototype.extractDependencies = function() {
     return new Promise(function(resolve) {
         var promisesArray = paths.map(function(currentPath) {
             return new Promise(function(resolve) {
-                fs.createReadStream(currentPath.cachePath).pipe(tar.extract(currentPath.folderPath + '_1'))
+                fs.createReadStream(currentPath.cachePath).pipe(tar.extract(currentPath.folderPath))
                     .on('finish', function() {
                         console.log('extractDependencies: finish ' + currentPath.folderPath);
                         resolve();
