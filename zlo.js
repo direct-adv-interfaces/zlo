@@ -186,12 +186,12 @@ Zlo.prototype.createConfigs = function() {
         if (dep.type == 'git' || dep.type == 'svn') {
             bowerJSON.dependencies[dep.name] = dep.repo + '#' + dep.commit;
             if (dep.postinstall) {
-                self._postinstall.push({ path: path.resolve(cwd, BOWER_STORAGE, dep.name), command: dep.postinstall });
+                self._postinstall.push({ path: path.join(BOWER_STORAGE, dep.name), command: dep.postinstall });
             }
         } else {
             npmJSON.dependencies[dep.name] = dep.version;
             if (dep.postinstall) {
-                self._postinstall.push({ path: path.resolve(cwd, NPM_STORAGE, dep.name), command: dep.postinstall });
+                self._postinstall.push({ path: path.join(NPM_STORAGE, dep.name), command: dep.postinstall });
             }
         }
     });
@@ -245,10 +245,9 @@ Zlo.prototype.loadFromNet = function () {
     });
 };
 
-Zlo.prototype.killMD5 = function () {
+Zlo.prototype.killMD5 = function() {
     var client = this.svn && this.svn.client,
         localCacheFilePath = this.local && path.resolve(process.cwd(), this.local.path, this.cacheFileName);
-
 
     if (this.svn) {
         console.log('Clear current cache from svn');
@@ -342,35 +341,32 @@ Zlo.prototype.killAll = function () {
  */
 Zlo.prototype.putToSvn = function() {
     var self = this,
-        client = this.svn.client,
-        svnCacheFilePath = this._getTMPCacheFilePath();
+        client = this.svn.client;
 
     return new Promise(function(resolve, reject) {
-        self._checkoutCacheFile(function(err, data) {
-            if (err) {
-                errorLog(err);
-            } else {
-                client.addLocal(function(err, data) {
-                    if (err) {
-                        console.error(err);
-                        reject(err);
-                    } else {
-                        console.log(data);
-                        console.log('all local changes has been added for commit');
-                        client.commit('zlo: add direct cache', function(err, data) {
-                            if (err) {
-                                console.error(err);
-                                reject(err);
-                            } else {
-                                console.log(data);
-                                console.log('local changes has been committed!');
-                                resolve();
-                            }
-                        });
-                    }
-                });
-            }
-        });
+        if (fs.existsSync(self._getTMPCacheFilePath())) {
+
+            client.add(self.cacheFileName, function(err, data) {
+                if (err) {
+                    console.log(err);
+                    //если файл уже в svn - то это штатное поведение и продолжаем работать
+                    resolve();
+                } else {
+                    client.commit(['zlo: add cache file ', self.cacheFileName], function(err, data) {
+                        if (err) {
+                            console.error(err);
+                            reject(err);
+                        } else {
+                            console.log(data);
+                            console.log(self.cacheFileName + ' has been committed!');
+                            resolve();
+                        }
+                    });
+                }
+            });
+        } else {
+            reject('error: nothing to commit')
+        }
     });
 };
 
@@ -404,7 +400,7 @@ Zlo.prototype.cleanUp = function() {
  */
 Zlo.prototype.donePostinstall = function() {
     var self = this;
-    console.log('this._postinstall', this._postinstall);
+    console.log('postinstall', this._postinstall);
 
     if (this._postinstall && this._postinstall.length > 0) {
         Promise.all(this._postinstall.map(function(postinstall) {
@@ -606,32 +602,25 @@ Zlo.prototype.loadFromSVN = function() {
         warnLog('Path to svn not defined');
         this.loadFromNet();
     } else {
-        this._checkoutCacheFile(function(err, data) {
-            if (err) {
-                errorLog(err);
-                self.loadFromNet();
-            } else {
-                if (fs.existsSync(svnCacheFilePath)) {
-                    self.extractDependencies(svnCacheFilePath).then(
-                        function() {
-                            self.svn.isOutOfDate = false;
+        if (fs.existsSync(svnCacheFilePath)) {
+            self.extractDependencies(svnCacheFilePath).then(
+                function() {
+                    self.svn.isOutOfDate = false;
 
-                            successLog('Load dependencies from svn - success!');
-                            self.onLoadSuccess('svn');
-                        },
-                        function(err) {
-                            errorLog('Can not extract archive from ' + self.cacheFileName);
-                            console.error(err);
-                            self.loadFromNet();
-                        }
-                    );
-                } else {
-                    warnLog('File ' + self.cacheFileName + ' not exist in svn');
-                    //идем за данными  в сеть
+                    successLog('Load dependencies from svn - success!');
+                    self.onLoadSuccess('svn');
+                },
+                function(err) {
+                    errorLog('Can not extract archive from ' + self.cacheFileName);
+                    console.error(err);
                     self.loadFromNet();
                 }
-            }
-        });
+            );
+        } else {
+            warnLog('File ' + self.cacheFileName + ' not exist in svn');
+            //идем за данными  в сеть
+            self.loadFromNet();
+        }
     }
 };
 
@@ -675,5 +664,11 @@ Zlo.prototype.loadFromLocalCache = function() {
  * Заргрузка зависимостей всеми доступными способами
  */
 Zlo.prototype.loadDependencies = function() {
-    this.loadFromLocalCache();
+    var self = this;
+
+    this._checkoutCacheFile(function(err) {
+        if (err) { console.log(err); }
+        self.loadFromLocalCache();
+    });
+
 };
