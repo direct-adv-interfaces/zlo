@@ -8,7 +8,6 @@ var NPM_CONFIG_NAME = 'package.json',
     STORAGES = [NPM_STORAGE, BOWER_STORAGE],
 
     md5 = require('md5'),
-    archiver = require('archiver'),
     Promise = require('promise'),
     tar = require('tar-fs'),
     fs = require('fs-extra'),
@@ -96,32 +95,42 @@ function Zlo(configJSON) {
  * @returns {Promise}
  */
 Zlo.prototype.archiveDependencies = function() {
-    var cwd = process.cwd(),
-        archivePath = this._getTMPCacheFilePath(),
-        archive = archiver('tar'),
-        output = fs.createWriteStream(archivePath);
+    var archivePath = this._getTMPCacheFilePath();
 
     console.log('creatign archive ' + archivePath);
 
     return new Promise(function(resolve, reject) {
-        output.on('close', function() {
-            successLog(archive.pointer() + ' total bytes');
-            successLog('Archiver has been finalized and the output file descriptor has closed.');
-            resolve();
+        var copyPromisesArray = STORAGES.map(function(name) {
+            return new Promise(function(resolve, reject) {
+                console.log('copy ' + name + ' -> ' + '_zlo_tmp_arc/' + name);
+                tar.pack(name).pipe(tar.extract('_zlo_tmp_arc/' + name))
+                    .on('finish', function() {
+                        resolve();
+                    })
+                    .on('error', function(er) {
+                        reject(err);
+                    })
+            })
         });
-
-        archive.on('error', function(err) {
-            errorLog(err);
-            reject();
-        });
-
-        archive.pipe(output);
-
-        archive.bulk([
-            { expand: true, cwd: cwd, src: ['./libs/*', './node_modules/*'] }
-        ]);
-
-        archive.finalize();
+        Promise.all(copyPromisesArray).then(
+            function() {
+                tar.pack('_zlo_tmp_arc').pipe(fs.createWriteStream(archivePath))
+                    .on('error', function(err) {
+                        console.log(err);
+                        errorLog('Archive error');
+                    })
+                    .on('finish', function() {
+                        successLog('Archived: ' + archivePath);
+                        fs.remove('_zlo_tmp_arc');
+                        resolve()
+                    })
+            },
+            function(err) {
+                errorLog('Error copy folders');
+                console.log(err);
+                reject();
+            }
+        );
     })
 };
 
@@ -400,13 +409,12 @@ Zlo.prototype.cleanUp = function() {
  */
 Zlo.prototype.donePostinstall = function() {
     var self = this;
-    console.log('postinstall', this._postinstall);
 
     if (this._postinstall && this._postinstall.length > 0) {
         Promise.all(this._postinstall.map(function(postinstall) {
             return new Promise(function(resolve, reject) {
                 process.chdir(postinstall.path);
-                console.log('posintall: ' + postinstall.command);
+                console.log('posintall: path = ' +postinstall.path + ', cmd ='  + postinstall.command);
                 exec(postinstall.command, function(err, stdout) {
                     if (err) {
                         reject(err);
