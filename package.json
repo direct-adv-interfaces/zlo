@@ -9,9 +9,11 @@
     "url": "https://github.com/heliarian/zlo.git"
   },
   "dependencies": {
+    "archiver": "^0.21.0",
     "bower": "^1.7.2",
     "cli-color": "^1.1.0",
     "commander": "2.5.0",
+    "decompress": "^3.0.0",
     "fs-extra": "^0.26.3",
     "lodash": "3.10.1",
     "md5": "2.0.0",
