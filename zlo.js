@@ -165,7 +165,7 @@ Zlo.prototype.createConfigs = function() {
         }
     });
 
-    bowerJSON.resolutions = config.json.resolutions;
+    bowerJSON.resolutions = config.json.resolutions && config.json.resolutions || [];
 
     this._configsData = [
         {

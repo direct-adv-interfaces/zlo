@@ -4,6 +4,8 @@ global.expect = global.chai.expect;
 
 var Zlo = require('../zlo'),
     clc = require('cli-color'),
+    fs = require('fs-extra'),
+    path = require('path'),
     sandbox = sinon.sandbox.create({
         properties: ["spy", "stub", "mock", "clock", "server", "requests"],
         useFakeTimers: true
@@ -82,24 +84,53 @@ describe('Выход с ошибкой если в Zlo не переданы п�
     it('Если есть local и svn - вызываем createConfigs', function() {
         var createConfigsSpy = sandbox.spy(Zlo.prototype, 'createConfigs');
 
-        zlo = new Zlo({ storage: { svn: 'svn', local: 'local' }});
+        zlo = new Zlo({ storage: { svn: 'svn', local: 'local'}, dependencies: [ { name: 'bla' } ] });
 
         expect(createConfigsSpy.called).to.be.true;
 
     });
 
-    it('Если есть local и svn - должны создаться файлы с зависимостями', function() {
-        var writeSpy = sandbox.spy(fs, 'writeJson');
+    describe('Если есть local и svn - должны создаться файлы с зависимостями', function() {
+        var writeSpy = sandbox.spy(fs, 'writeJson'),
+            cwd = process.cwd();
 
         zlo = new Zlo({
             storage: { svn: 'svn', local: 'local' },
             dependencies: [
-                { type: 'git', name: 'bla' },
-                { name: 'bla1' }
+                {
+                    "name": "bem",
+                    "version": "0.6.16"
+                },
+                {
+                    "type": "git",
+                    "dest": ".",
+                    "name": "schema-docs",
+                    "repo": "git://github.yandex-team.ru/belyanskii/schema-docs.git",
+                    "commit": "92a93b4360f8bf0e08a0790d23e68ae47e432347"
+                }
             ]
         });
 
-        expect(writeSpy.called).to.be.true;
+        it('Проверка создания .bowerrc', function() {
+            expect(writeSpy.firstCall.args[0]).to.be.equal(path.resolve(cwd, '.bowerrc'));
+            expect(writeSpy.firstCall.args[1]).to.deep.equal({ directory: 'libs' });
+        });
+
+        it('Проверка создания package.json', function() {
+            expect(writeSpy.secondCall.args[0]).to.be.equal(path.resolve(cwd, 'package.json'));
+            expect(writeSpy.secondCall.args[1]).to.deep.equal({ dependencies: { bem: '0.6.16' } });
+        });
+
+        it('Проверка создания bower.json', function() {
+            expect(writeSpy.thirdCall.args[0]).to.be.equal(path.resolve(cwd, 'bower.json'));
+            expect(writeSpy.thirdCall.args[1]).to.deep.equal({
+                dependencies: {
+                    "schema-docs": "git://github.yandex-team.ru/belyanskii/schema-docs.git#92a93b4360f8bf0e08a0790d23e68ae47e432347"
+                },
+                name: 'zlo',
+                resolutions: []
+            });
+        });
     });
 
 });
