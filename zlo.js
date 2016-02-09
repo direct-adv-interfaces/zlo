@@ -8,6 +8,7 @@ var CONFIG_NAME = 'zlo.json',
     BOWER_STORAGE = 'libs',
 
     md5 = require('md5'),
+    json = require('format-json'),
     Promise = require('promise'),
     fs = require('fs-extra'),
     exec = require('child_process').exec,
@@ -36,6 +37,14 @@ function Zlo(configJSON) {
 
     if (!configJSON.storage || (!configJSON.storage.local || !configJSON.storage.svn)) {
         console.error(clc.red('Empty local storage path'));
+        process.exit(0);
+
+        return;
+    }
+
+    if (!configJSON.dependencies || !configJSON.dependencies.length) {
+        console.error(clc.red('Empty dependencies'));
+
         process.exit(0);
 
         return;
@@ -174,7 +183,7 @@ Zlo.prototype.createConfigs = function() {
     ];
 
     this._configsData.forEach(function (config) {
-        console.log('create confing ' + config.path, config.data);
+        console.log('create confing ' + config.path, json.plain(config.data));
         fs.writeJson(config.path, config.data)
     });
 };
@@ -187,6 +196,7 @@ Zlo.prototype.loadFromNet = function () {
     var self = this;
 
     console.log(clc.green('Load dependencies via bower and npm'));
+
     console.log('npm install');
 
     return new Promise(function(resolve, reject) {
@@ -464,6 +474,11 @@ Zlo.prototype.extractDependencies = function(storagePath) {
 
 };
 
+/**
+ * Копирование объекта из одной директории в другую
+ * @param fromPath
+ * @param toPath
+ */
 Zlo.prototype.copyArchives = function (fromPath, toPath) {
     var self = this;
 
@@ -561,9 +576,13 @@ Zlo.prototype.putToSvn = function() {
     });
 };
 
-Zlo.prototype.onLoadSuccess = function() {
-    console.log(clc.green('Loading finished. Done cleanup'));
+/**
+ * Удаляем ненужные конфиги и временные файлы
+ */
+Zlo.prototype.doCleanup = function() {
     var cwd = process.cwd();
+
+    console.log(clc.green('Remove tmp files and folders'));
 
     fs.remove(this._svnData.path);
 
@@ -576,11 +595,16 @@ Zlo.prototype.onLoadSuccess = function() {
     fs.remove(path.resolve(cwd, BOWER_CONFIG_NAME), function(err) {
         if (err) console.error(err);
     });
+};
 
+/**
+ * Действия, выполняемые после успешной загрузки зависимостей
+ */
+Zlo.prototype.onLoadSuccess = function() {
+    var self = this;
 
     if (this._postinstall && this._postinstall.length > 0) {
-        console.log(clc.green('Postinstall'));
-
+        console.log(clc.green('Doing postinstall'));
         Promise.all(this._postinstall.map(function(postinstall) {
             return new Promise(function(resolve, reject) {
                 console.log('posintall: ' + postinstall.command);
@@ -588,6 +612,7 @@ Zlo.prototype.onLoadSuccess = function() {
                     if (err) {
                         console.log(err);
                         reject();
+                        self.doCleanup();
                     } else {
                         console.log(stdout);
                         resolve();
@@ -597,14 +622,20 @@ Zlo.prototype.onLoadSuccess = function() {
         })).then(
             function() {
                 console.log(clc.green('postinstall done'));
+
             },
             function (err) {
                 console.log(clc.red('postinstall error'));
             }
         )
+    } else {
+        this.doCleanup();
     }
 };
 
+/**
+ * Установка зависимостей согласно конфигу zlo.json
+ */
 Zlo.prototype.loadDependencies = function() {
     var self = this,
         putToSVNFunc = function () {
@@ -648,6 +679,10 @@ Zlo.prototype.loadDependencies = function() {
     );
 };
 
+/**
+ * Пытаемся загрузить зависимости из локального кэша
+ * @returns {Promise}
+ */
 
 Zlo.prototype.loadFromLocalCache = function() {
     var self = this;
@@ -688,6 +723,10 @@ Zlo.prototype.loadFromLocalCache = function() {
 
 };
 
+/**
+ * Пытаемся загрузить зависимости из svn
+ * @returns {Promise}
+ */
 Zlo.prototype.loadFromSVNCache = function() {
     var self = this;
 
@@ -742,7 +781,6 @@ Zlo.prototype.loadFromSVNCache = function() {
                 }
 
             });
-
 
         });
     });
