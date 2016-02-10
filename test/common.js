@@ -6,6 +6,7 @@ var Zlo = require('../zlo'),
     clc = require('cli-color'),
     fs = require('fs-extra'),
     path = require('path'),
+    Promise = require('promise'),
     sandbox = sinon.sandbox.create({
         properties: ["spy", "stub", "mock", "clock", "server", "requests"],
         useFakeTimers: true
@@ -91,24 +92,32 @@ describe('Выход с ошибкой если в Zlo не переданы п�
     });
 
     describe('Если есть local и svn - должны создаться файлы с зависимостями', function() {
-        var writeSpy = sandbox.spy(fs, 'writeJson'),
+        var writeSpy,
             cwd = process.cwd();
 
-        zlo = new Zlo({
-            storage: { svn: 'svn', local: 'local' },
-            dependencies: [
-                {
-                    "name": "bem",
-                    "version": "0.6.16"
-                },
-                {
-                    "type": "git",
-                    "dest": ".",
-                    "name": "schema-docs",
-                    "repo": "git://github.yandex-team.ru/belyanskii/schema-docs.git",
-                    "commit": "92a93b4360f8bf0e08a0790d23e68ae47e432347"
-                }
-            ]
+        beforeEach(function() {
+            writeSpy = sandbox.spy(fs, 'writeJson');
+            zlo = new Zlo({
+                storage: { svn: 'svn', local: 'local' },
+                dependencies: [
+                    {
+                        "name": "bem",
+                        "version": "0.6.16"
+                    },
+                    {
+                        "type": "git",
+                        "dest": ".",
+                        "name": "schema-docs",
+                        "repo": "git://github.yandex-team.ru/belyanskii/schema-docs.git",
+                        "commit": "92a93b4360f8bf0e08a0790d23e68ae47e432347"
+                    }
+                ]
+            });
+        });
+
+        afterEach(function() {
+            zlo = undefined;
+            sandbox.restore();
         });
 
         it('Проверка создания .bowerrc', function() {
@@ -131,6 +140,250 @@ describe('Выход с ошибкой если в Zlo не переданы п�
                 resolutions: []
             });
         });
+    });
+
+
+});
+
+describe('Загрузка зависимостей', function() {
+    var doCmdStub;
+
+    beforeEach(function() {
+        zlo = new Zlo({
+            storage: { svn: 'svn', local: 'local' },
+            dependencies: [
+                {
+                    "name": "bem",
+                    "version": "0.6.16"
+                },
+                {
+                    "type": "git",
+                    "dest": ".",
+                    "name": "schema-docs",
+                    "repo": "git://github.yandex-team.ru/belyanskii/schema-docs.git",
+                    "commit": "92a93b4360f8bf0e08a0790d23e68ae47e432347"
+                }
+            ]
+        });
+
+        doCmdStub = sandbox.stub(Zlo.prototype, '_doCmd', function(path, cmd, callback) {
+            console.log(clc.blue(cmd));
+            callback(null, {});
+        });
+    });
+
+    afterEach(function() {
+        zlo = undefined;
+
+        sandbox.restore();
+    });
+
+    describe('Успешная загрузка из локального кэша', function() {
+
+        // loadDependencies -> loadFromLocalCache().putToSvn
+        beforeEach(function() {
+            sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
+                return new Promise(function(resolve, reject) {
+                    resolve();
+                });
+            });
+
+        });
+
+        afterEach(function() {
+            console.log('restore');
+            sandbox.restore();
+        });
+
+        it('Пытаемся положить зависимости в svn', function(done) {
+            var putToSvnSpy = sandbox.spy(Zlo.prototype, 'putToSvn');
+
+            zlo.loadDependencies().then(function() {
+                try {
+                    expect(putToSvnSpy.called).to.be.true;
+                    done()
+                } catch(e) {
+                    done(e)
+                }
+
+            });
+        });
+
+        it('Проверяем наличие зависимостей в svn', function(done) {
+            var checkCashesInSVNSpy = sandbox.spy(Zlo.prototype, 'checkCashesInSVN');
+
+            zlo.loadDependencies().then(function() {
+                try {
+                    //doCmd вызывалось строго один раз
+                    expect(doCmdStub.callCount).to.be.equal(1);
+                    //и этот один раз был для проверки наличия файла
+                    expect(doCmdStub.firstCall.args[1]).to.have.string('svn ls');
+                    expect(checkCashesInSVNSpy.called).to.be.true;
+                    done()
+                } catch(e) {
+                    done(e)
+                }
+
+            });
+        });
+
+        it('Если зависимостей нет в svn - кладем', function(done) {
+            sandbox.stub(Zlo.prototype, 'copyArchives', function() {
+                return new Promise(function(resolve) {
+                    resolve();
+                })
+            });
+
+            //стабим  checkCashesInSVN чтобы копировало в архивную папку
+            sandbox.stub(Zlo.prototype, 'checkCashesInSVN', function(callback) {
+                callback(null, false);
+            });
+
+
+            zlo.loadDependencies().then(function() {
+                try {
+                    //счекаутили директорию
+                    expect(doCmdStub.firstCall.args[1]).to.have.string('svn checkout');
+                    //добавили
+                    expect(doCmdStub.secondCall.args[1]).to.have.string('svn add');
+                    //закоммитили
+                    expect(doCmdStub.thirdCall.args[1]).to.have.string('svn commit');
+
+                    done()
+                } catch(e) {
+                    done(e)
+                }
+            });
+        });
+
+        it('Если успешно положили в svn - выполняем onLoadSuccess', function(done) {
+            var successSpy = sandbox.spy(Zlo.prototype, 'onLoadSuccess');
+
+            sandbox.stub(Zlo.prototype, 'putToSvn', function() {
+                return new Promise(function(resolve) {
+                    resolve();
+                })
+            });
+
+            zlo.loadDependencies().then(function() {
+                try {
+                    expect(successSpy.called).to.be.true;
+
+                    done()
+                } catch(e) {
+                    done(e)
+                }
+            });
+        });
+    });
+
+    it('Не удалось загрузить зависимости из локального кэша - грузим из svn', function(done) {
+        sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
+            return new Promise(function(resolve, reject) {
+                reject();
+            });
+        });
+
+        var loadFromSvnSpy = sandbox.spy(Zlo.prototype, 'loadFromSVNCache');
+
+        zlo.loadDependencies().then(function() {
+            try {
+                expect(loadFromSvnSpy.called).to.be.true;
+
+                done()
+            } catch(e) {
+                done(e)
+            }
+        });
+    });
+
+
+    describe('Успешная загрузка из svn', function() {
+        beforeEach(function() {
+            sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
+                return new Promise(function(resolve, reject) {
+                    reject();
+                });
+            });
+            sandbox.stub(Zlo.prototype, 'loadFromSVNCache', function() {
+                return new Promise(function(resolve, reject) {
+                    resolve();
+                });
+            });
+
+        });
+
+        afterEach(function() {
+           sandbox.restore();
+        });
+
+        it('Кладем зависимости в локальный кэш', function(done) {
+            var copyArchivesSpy = sandbox.spy(Zlo.prototype, 'copyArchives');
+
+            zlo.loadDependencies().then(function() {
+                try {
+                    expect(copyArchivesSpy.called).to.be.true;
+
+                    done()
+                } catch(e) {
+                    done(e)
+                }
+            });
+        });
+
+        it('Выполняем действия onLoadSuccess', function(done) {
+            var onLoadSuccessSpy = sandbox.spy(Zlo.prototype, 'onLoadSuccess');
+
+            sandbox.stub(Zlo.prototype, 'copyArchives', function() {
+                return new Promise(function(resolve, reject) {
+                    resolve();
+                });
+            });
+
+            zlo.loadDependencies().then(function() {
+                try {
+                    expect(onLoadSuccessSpy.called).to.be.true;
+
+                    done()
+                } catch(e) {
+                    done(e)
+                }
+            });
+        });
+    });
+
+    it('Не удалось загрузить зависимости из svn - грузим из сети', function(done) {
+        sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
+            return new Promise(function(resolve, reject) {
+                reject();
+            });
+        });
+
+        sandbox.stub(Zlo.prototype, 'loadFromSVNCache', function() {
+            return new Promise(function(resolve, reject) {
+                reject();
+            });
+        });
+
+        var loadFromNetSpy = sandbox.spy(Zlo.prototype, 'loadFromNet');
+
+        zlo.loadDependencies().then(function() {
+            try {
+                expect(loadFromNetSpy.called).to.be.true;
+
+                done()
+            } catch(e) {
+                done(e)
+            }
+        });
+    });
+
+    describe('Успешная загрузка зависимостей из сети', function(done) {
+        it('Должна вызваться функция архивирования зависимостей', function() {});
+        it('Кладем зависимости в локальный кэш', function(done) {});
+        it('Проверяем наличие зависимостей в svn', function(done) {});
+        it('Если зависимостей нет в svn - кладем', function(done) {});
+        it('Выполняем действия onLoadSuccess', function(done) {});
     });
 
 });

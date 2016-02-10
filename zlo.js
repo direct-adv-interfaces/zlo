@@ -109,7 +109,7 @@ Zlo.prototype._doCmd = function (path, svncmd, callback) {
  * Проверяем есть ли нужные кэши в svn
  * @param callback
  */
-Zlo.prototype._checkCashesInSVN = function(callback) {
+Zlo.prototype.checkCashesInSVN = function(callback) {
     var self = this,
         svncmd = 'svn ls '+ this._svnData.url;
 
@@ -250,7 +250,7 @@ Zlo.prototype.killMD5 = function (options) {
 
     var self = this;
 
-    self._checkCashesInSVN(function (err, isFilesExists) {
+    self.checkCashesInSVN(function (err, isFilesExists) {
         var cmd = 'svn rm ' + self._cacheFileNames.map(function (name) { return svn.url + '/' + name; }).join(' ') +
             ' -m "zlo: remove caches"';
 
@@ -521,7 +521,7 @@ Zlo.prototype.putToSvn = function() {
         }
 
         //проверяем есть ли уже файлы в репозитории
-        self._checkCashesInSVN(function (err, isFilesExists) {
+        self.checkCashesInSVN(function (err, isFilesExists) {
             if (err) {
                 reject();
 
@@ -602,7 +602,7 @@ Zlo.prototype.doCleanup = function() {
  */
 Zlo.prototype.onLoadSuccess = function() {
     var self = this;
-
+    console.log('---------------------onLoadSuccess');
     if (this._postinstall && this._postinstall.length > 0) {
         console.log(clc.green('Doing postinstall'));
         Promise.all(this._postinstall.map(function(postinstall) {
@@ -633,39 +633,52 @@ Zlo.prototype.onLoadSuccess = function() {
     }
 };
 
+Zlo.prototype.tryPutToSvn = function() {
+    var self = this;
+
+    return this.putToSvn().then(
+        function () {
+            console.log(clc.green.bold('Dependencies committed to SVN cache'));
+            self.onLoadSuccess();
+        },
+        function (err) {
+            console.log(clc.err.bold('Error: dependencies not committed to SVN cache'));
+            //не смогли положить в svn - но почистить за собой нужно
+            self.onLoadSuccess();
+        }
+    );
+};
+
 /**
  * Установка зависимостей согласно конфигу zlo.json
  */
 Zlo.prototype.loadDependencies = function() {
-    var self = this,
-        putToSVNFunc = function () {
-            self.putToSvn().then(
-                function () {
-                    console.log(clc.green.bold('Dependencies committed to SVN cache'));
-                    self.onLoadSuccess();
-                },
-                function (err) {
-                    console.log(clc.err.bold('Error: dependencies not committed to SVN cache'));
-                    //не смогли положить в svn - но почистить за собой нужно
-                    self.onLoadSuccess();
-                }
-            );
-        };
+    var self = this;
 
-    self.loadFromLocalCache().then(
-        putToSVNFunc,
+    return self.loadFromLocalCache().then(
+        function() {
+            return self.tryPutToSvn();
+        },
         function (err) {
-            self.loadFromSVNCache().then(
+            return self.loadFromSVNCache().then(
                 function () {
+                    console.log('loadFromSVNCache');
                     //если данные загрузились из svn - копируем их в локальный кэш
-                    self.copyArchives(self._svnData.path, self._localStoragePath)
-                        .then(function () {
-                            self.onLoadSuccess();
-                        });
+                    return self.copyArchives(self._svnData.path, self._localStoragePath)
+                        .then(
+                            function () {
+                                self.onLoadSuccess();
+                            },
+                            function(err) {
+                                console.log(err);
+                            }
+                        );
                 },
                 function (err) {
-                    self.loadFromNet().then(
-                        putToSVNFunc,
+                    return self.loadFromNet().then(
+                        function() {
+                            return self.tryPutToSvn();
+                        },
                         function (err) {
                             console.log(clc.red('Can not load dependencies!!!'));
 
@@ -690,6 +703,7 @@ Zlo.prototype.loadFromLocalCache = function() {
     console.log(clc.green.bold('Load from local cache'));
 
     return new Promise(function (resolve, reject) {
+
         if (!self._localStoragePath) {
             console.log(clc.yellow('Can not load from local cache. Cache path not defined'));
             reject();
@@ -743,7 +757,7 @@ Zlo.prototype.loadFromSVNCache = function() {
         }
 
         //проверяем есть ли уже файлы в репозитории
-        self._checkCashesInSVN(function (err, isFilesExists) {
+        self.checkCashesInSVN(function (err, isFilesExists) {
             if (err || !isFilesExists) {
                 //если файлов нет - то и забирать нечего, будем пробовать другие варианты
                 console.log(clc.yellow('Can not load files from SVN'));
