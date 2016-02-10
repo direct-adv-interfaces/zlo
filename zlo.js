@@ -224,15 +224,7 @@ Zlo.prototype.loadFromNet = function () {
                 console.log(stdout);
                 console.log(clc.green('bower install finished'));
 
-                self.archiveDependencies().then(
-                    function() {
-                        console.log(clc.green('Dependencies successfuly archived'));
-                        resolve();
-                    },
-                    function(err) {
-                        console.log(err);
-                        console.log(clc.red('Can not archive dependencies'));
-                    });
+                resolve();
             });
         });
     });
@@ -436,6 +428,7 @@ Zlo.prototype.archiveDependencies = function() {
 Zlo.prototype.extractDependencies = function(storagePath) {
     var self = this,
         cwd = process.cwd();
+
 
     console.log(clc.green.bold('extractDependencies - starts, path = ' + storagePath));
 
@@ -677,17 +670,23 @@ Zlo.prototype.loadDependencies = function() {
                 function (err) {
                     return self.loadFromNet().then(
                         function() {
-                            return self.tryPutToSvn();
+                            return self.archiveDependencies().then(
+                                function() { console.log(clc.green('Dependencies successfuly archived')); },
+                                function(err) { console.log(clc.red('Can not archive dependencies')); }
+                            );
                         },
                         function (err) {
                             console.log(clc.red('Can not load dependencies!!!'));
 
                             process.exit(0);
                         }
-                    )
+                    ).then(function() {
+                        return self.tryPutToSvn();
+                    }).catch(function() {
+                        console.log(err);
+                    });
                 }
             );
-
         }
     );
 };
@@ -702,38 +701,38 @@ Zlo.prototype.loadFromLocalCache = function() {
 
     console.log(clc.green.bold('Load from local cache'));
 
-    return new Promise(function (resolve, reject) {
+    if (!self._localStoragePath) {
+        console.log(clc.yellow('Can not load from local cache. Cache path not defined'));
 
-        if (!self._localStoragePath) {
-            console.log(clc.yellow('Can not load from local cache. Cache path not defined'));
-            reject();
+        return Promise.reject('Can not load from local cache. Cache path not defined');
+    }
 
-            return;
-        }
+    if (_.every(self._cacheFileNames, function (name) {
+            var filePath = path.resolve(self._localStoragePath, name);
 
-        if (_.every(self._cacheFileNames, function (name) {
-                var filePath = path.resolve(self._localStoragePath, name);
+            console.log(filePath + ' exists: ' + fs.existsSync(filePath));
 
-                console.log(filePath + ' exists: ' + fs.existsSync(filePath));
-                return fs.existsSync(filePath);
-            })) {
-            console.log(clc.green('Files ' + self._cacheFileNames + ' found in local storage'));
+            return fs.existsSync(filePath);
+        })) {
+        console.log(clc.green('Files ' + self._cacheFileNames + ' found in local storage'));
 
-            self.extractDependencies(self._localStoragePath).then(
-                function () {
-                    console.log(clc.green.bold('Dependencies succesfully retrive from local strorafe'));
-                    resolve();
-                },
-                function (err) {
-                    console.log(clc.yellow('Can not load files from local strorafe'));
-                    reject();
-                }
-            );
-        } else {
-            console.log(clc.yellow('Files ' + self._cacheFileNames + ' not exists in local storage'));
-            reject();
-        }
-    })
+        return self.extractDependencies(self._localStoragePath).then(
+            function () {
+                console.log(clc.green.bold('Dependencies succesfully retrive from local strorafe'));
+
+                return Promise.resolve();
+            },
+            function (err) {
+                console.log(clc.yellow('Can not load files from local strorafe'));
+
+                return Promise.reject();
+            }
+        );
+    } else {
+        console.log(clc.yellow('Files ' + self._cacheFileNames + ' not exists in local storage'));
+
+        return Promise.reject('Files ' + self._cacheFileNames + ' not exists in local storage');
+    }
 
 };
 
@@ -747,15 +746,13 @@ Zlo.prototype.loadFromSVNCache = function() {
     console.log(clc.green.bold('Load from svn cache'));
     //svn у нас уже счекаучен в режиме --depth empty
 
+    if (!self._svnData) {
+        console.log(clc.yellow('SVN cache not defined'));
+
+        return Promise.reject('SVN cache not defined');
+    }
+
     return new Promise(function (resolve, reject) {
-        if (!self._svnData) {
-            console.log(clc.yellow('SVN cache not defined'));
-
-            reject();
-
-            return;
-        }
-
         //проверяем есть ли уже файлы в репозитории
         self.checkCashesInSVN(function (err, isFilesExists) {
             if (err || !isFilesExists) {
