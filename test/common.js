@@ -291,8 +291,7 @@ describe('Загрузка зависимостей', function() {
         });
 
         var loadFromSvnStub = sandbox.stub(Zlo.prototype, 'loadFromSVNCache', function() {
-            //закругляемся - в этом кейсе проверять больше нечего
-            return Promise.reject();
+            return Promise.resolve();
         });
 
         zlo.loadDependencies().then(function() {
