@@ -19,6 +19,11 @@ var CONFIG_NAME = 'zlo.json',
 
 module.exports = Zlo;
 
+function errorLog(code, debugMsg) {
+    console.error(clc.red('ERROR: ' + code));
+    debugMsg && console.error(debugMsg);
+}
+
 /**
  *
  * @param params
@@ -36,14 +41,14 @@ function Zlo(configJSON) {
     this._postinstall = [];
 
     if (!configJSON.storage || (!configJSON.storage.local || !configJSON.storage.svn)) {
-        console.error(clc.red('Empty local storage path'));
+        errorLog('Empty local storage path');
         process.exit(0);
 
         return;
     }
 
     if (!configJSON.dependencies || !configJSON.dependencies.length) {
-        console.error(clc.red('Empty dependencies'));
+        errorLog('Empty dependencies');
 
         process.exit(0);
 
@@ -88,56 +93,104 @@ function Zlo(configJSON) {
     this.createConfigs();
 }
 
-
-Zlo.prototype._getCacheFileName = function (index) {
+/**
+ * Возвращает имя файла, в который запишется кэш
+ * 0 -  node_modules_nnnnn.tar
+ * 1 -  libs_nnnnn.tar
+ * @param {Number} index
+ * @returns {*}
+ * @private
+ */
+Zlo.prototype._getCacheFileName = function(index) {
     return this._cacheFileNames[index];
 };
 
-Zlo.prototype._doCmd = function (path, svncmd, callback) {
+/**
+ * Выполняет запрос в svn
+ * @param {String} path путь по которому лежит папка с svn-репозиторием
+ * @param {String} svncmd команда, например 'svn ls' или 'svn up'
+ * @return {Promise}
+ * @private
+ */
+Zlo.prototype._doCmd = function (path, svncmd) {
     console.log(clc.yellow.italic(svncmd));
     var cwd = process.cwd();
 
     process.chdir(path);
 
-    exec(svncmd, function (err, data) {
-        process.chdir(cwd);
-        callback(err, data);
+    return new Promise(function(resolve, reject) {
+        exec(svncmd, function (err, stdout) {
+            process.chdir(cwd);
+
+            if (err) {
+                errorLog(clc.red('svn cmd error'), err);
+                reject(err);
+            } else {
+                console.log(clc.green('svn cmd success: ') + stdout);
+                resolve(stdout);
+            }
+        });
     });
 };
 
+
+/**
+ * Проверяем есть ли имена файлов из _cacheFileNames в потоке вывода stdout
+ * @param {String} stdout
+ * @returns {Boolean}
+ * @private
+ */
+Zlo.prototype._isFilesNamesInStdout = function(stdout) {
+    return (_.every(this._cacheFileNames, function (name) {
+        var regexp = new RegExp('(^|\\s)(' + name + ')($|\\s)'),
+            res = stdout.match(regexp);
+
+        res && res[0] & console.log(clc.yellow('Found: '+ res && res[0]));
+
+        return res && res[0];
+    }));
+};
+
+/**
+ * Проверяет есть ли имена из списка файлов в директории
+ * @param {String} dirPath
+ * @returns {Boolean}
+ * @private
+ */
+Zlo.prototype._isFilesExistsInDir = function(dirPath) {
+    var self = this;
+
+    return _.every(self._cacheFileNames, function (name) {
+        var filePath = path.resolve(dirPath, name);
+
+        console.log(filePath + ' exists: ' + fs.existsSync(filePath));
+
+        return fs.existsSync(filePath);
+    });
+};
+
+
 /**
  * Проверяем есть ли нужные кэши в svn
- * @param callback
+ * @return {Promise}
  */
-Zlo.prototype.checkCashesInSVN = function(callback) {
+Zlo.prototype._checkCashesInSVN = function() {
     var self = this,
         svncmd = 'svn ls '+ this._svnData.url;
 
+    return this._doCmd(self._svnData.path, svncmd)
+        .then(function(data) {
+            if (self._isFilesNamesInStdout(data)) {
+                console.log(clc.green('Files ' + self._cacheFileNames + ' found in svn'));
 
+                return true;
+            } else {
+                console.log(clc.yellow('Files ' + self._cacheFileNames + ' not found in svn'));
 
-    this._doCmd(self._svnData.path, svncmd, function (err, data) {
-        if (err) {
-            console.log(clc.red('svn ls - error'));
-            callback(err);
-
-            return;
-        }
-
-        if (_.every(self._cacheFileNames, function (name) {
-                var regexp = new RegExp('(^|\\s)(' + name + ')($|\\s)'),
-                    res = data.match(regexp);
-
-                res && res[0] & console.log(clc.yellow('Found: '+ res && res[0]));
-
-                return res && res[0];
-            })) {
-            console.log(clc.green('Files ' + self._cacheFileNames + ' found in svn'));
-            callback(null, true);
-        } else {
-            console.log(clc.yellow('Files ' + self._cacheFileNames + ' not found in svn'));
-            callback(null, false);
-        }
-    });
+                return false;
+            }
+        })
+        .catch(function(e) { return Promise.reject(e); });
 };
 
 
@@ -192,7 +245,7 @@ Zlo.prototype.createConfigs = function() {
  * Установка зависимостей через bower и npm
  * @returns {*}
  */
-Zlo.prototype.loadFromNet = function () {
+Zlo.prototype._loadFromNet = function () {
     var self = this;
 
     console.log(clc.green('Load dependencies via bower and npm'));
@@ -202,7 +255,7 @@ Zlo.prototype.loadFromNet = function () {
     return new Promise(function(resolve, reject) {
         exec('npm install', function(err, stdout) {
             if (err) {
-                console.error(err);
+                errorLog('npm install', err);
                 reject();
                 process.exit(0);
                 return;
@@ -215,7 +268,7 @@ Zlo.prototype.loadFromNet = function () {
             console.log(bowerPath + ' install');
             exec(bowerPath + ' install', function(err, stdout) {
                 if (err) {
-                    console.error(err);
+                    errorLog(bowerPath + ' install', err);
                     reject();
                     process.exit(0);
 
@@ -242,26 +295,26 @@ Zlo.prototype.killMD5 = function (options) {
 
     var self = this;
 
-    self.checkCashesInSVN(function (err, isFilesExists) {
-        var cmd = 'svn rm ' + self._cacheFileNames.map(function (name) { return svn.url + '/' + name; }).join(' ') +
-            ' -m "zlo: remove caches"';
+    self._checkCashesInSVN()
+        .then(function(isFilesExists) {
+            if (!isFilesExists) {
+                return false;
+            }
 
-        if (isFilesExists) {
-            self._doCmd('_kill-md5-dir_', cmd, function(err, data) {
-                if (err) {
-                    console.log(err);
-                } else {
-                    console.log(data);
-                    console.log(clc.green('Files ' + self._cacheFileNames + ' removed from svn'));
-                    fs.removeSync('_kill-md5-dir_');
-                }
-            });
-        } else {
+            var cmd = 'svn rm ' + self._cacheFileNames.map(function (name) { return svn.url + '/' + name; }).join(' ') +
+                ' -m "zlo: remove caches"';
+
+            return self._doCmd('_kill-md5-dir_', cmd);
+        })
+        .then(function(isFilesRemoved) {
+            if (isFilesRemoved) {
+                console.log(clc.green('Files ' + self._cacheFileNames + ' removed from svn'))
+            } else {
+                console.log(clc.green('Nothing to remove'));
+            }
             fs.removeSync('_kill-md5-dir_');
-        }
-    });
-
-
+        })
+        .catch(function(err) { return Promise.reject(err); });
 
     if (!options.svnOnly) {
         this._removeCacheFiles(this._localStoragePath);
@@ -292,41 +345,45 @@ Zlo.prototype.killAll = function (options) {
 
     var currentDir = '_kill-all-dir_';
 
-    self._doCmd(currentDir, 'svn checkout --depth immediates ' + svn.url + ' ' + currentDir, function(err, stout) {
-        if (err) {
-            console.log(err);
+    if (!fs.existsSync(currentDir)) {
+        console.log('create directory: ' + currentDir);
+        fs.mkdirsSync(currentDir);
+    }
 
-            process.exit(0);
-        }
-
-        self._doCmd(currentDir, 'svn ls', function (res, stout) {
+    return self._doCmd(currentDir, 'svn checkout --depth immediates ' + svn.url + ' .')
+        .then(function(stout) {
             console.log(stout);
 
+            return self._doCmd(currentDir, 'svn ls');
+        })
+        .then(function(stout) {
             if (!stout) {
                 console.log(clc.green.bold('SVN cache is already empty'));
-            } else {
-                self._doCmd(currentDir, 'svn rm *', function(err, stout) {
 
-                    if (err) {
-                        console.error(err);
-                    } else {
-                        console.log(stout);
-                        self._doCmd(currentDir, 'svn commit -m "zlo: remove all direct cache"', function(err, stout) {
-                            if (err) {
-                                console.error(err);
-                                process.exit(0);
-                            }
-                            console.log('local changes has been committed!');
-                            console.log(clc.green.bold('SVN cache is  empty'));
-                            fs.removeSync(currentDir);
-                        });
-                    }
-                });
+                return false;
             }
 
-        });
+            console.log(stout);
 
-    });
+            return self._doCmd(currentDir, 'svn rm *')
+                .then(function(stout) {
+                    console.log(stout);
+
+                    return self._doCmd(currentDir, 'svn commit -m "zlo: remove all direct cache"', function(err, stout) {
+                        if (err) {
+                            errorLog('svn commit -m "zlo: remove all direct cache"', err);
+                            process.exit(0);
+                        }
+                        console.log('local changes has been committed!');
+                        console.log(clc.green.bold('SVN cache is  empty'));
+                        fs.removeSync(currentDir);
+                    });
+                })
+        })
+        .catch(function(err) {
+            errorLog('do cmd', err);
+            process.exit(0);
+        });
 
 
     if (!options.svnOnly) {
@@ -340,39 +397,32 @@ Zlo.prototype.killAll = function (options) {
  * Чекаут svn репозитории
  * @param {String} depth Параметр --deps с которым будет выполнен svn checkout
  * @param {Array} files список файлов, которые нужно забрать из репозитория
- * @param callback
+ * @retutn {Promise}
  * @private
  */
-Zlo.prototype._checkoutSVN = function(depth, files, callback) {
+Zlo.prototype._checkoutSVN = function(depth, files) {
     var self = this;
 
     files = files || [];
 
-    this._doCmd(self._svnData.path, 'svn checkout ' + this._svnData.url + ' . --depth ' + depth, function(err, data) {
-        if (err) {
-            console.error(err);
-            callback(err, data);
-        } else {
-            if (files.length) {
-                console.log(clc.green('Retrive files from svn'));
-                self._doCmd(self._svnData.path, 'svn up ' + files.join(' '), function(err, data) {
-                    if (err) {
-                        console.error(err);
-                        console.log(clc.red('Can not retrive files from SVN'));
-                        callback(err, data);
-                    } else {
-                        console.log(clc.green('Files successfully retrives'));
-                        callback(null, data);
-                    }
+    return self._doCmd(self._svnData.path, 'svn checkout ' + self._svnData.url + ' . --depth ' + depth)
+        .then(function(stdout) {
+            return files.length && self._doCmd(self._svnData.path, 'svn up ' + files.join(' '));
+        })
+        .then(function(stdout) {
+            if (!files) return true;
 
-                });
-
+            if (stdout) {
+                console.log(clc.green('Files successfully retrives'));
             } else {
-                console.log(data);
-                callback(err, data);
+                errorLog('Can not retrive files from SVN');
             }
-        }
-    });
+
+            return true;
+        })
+        .catch(function(err) {
+            return Promise.reject('Can not retrive files from SVN');
+        });
 };
 
 
@@ -399,8 +449,7 @@ Zlo.prototype.archiveDependencies = function() {
                         resolve()
                     })
                     .on('error', function (err) {
-                        console.log(err);
-                        console.log(clc.red('Can not archive folder ' + archiveAbsPath));
+                        errorLog('Can not archive folder ' + archiveAbsPath, err);
                         reject();
                     })
             });
@@ -412,7 +461,7 @@ Zlo.prototype.archiveDependencies = function() {
                 resolve();
             },
             function (err) {
-                console.log(clc.red.bold('Can not archive folders'));
+                errorLog('Can not archive folders', err);
                 reject();
             }
         );
@@ -425,45 +474,42 @@ Zlo.prototype.archiveDependencies = function() {
  * @param {String} storagePath путь из которого извлекаем - это может быть локальный кэш или временная папка с SVN
  * @returns {*}
  */
-Zlo.prototype.extractDependencies = function(storagePath) {
+Zlo.prototype._extractDependencies = function(storagePath) {
     var self = this,
         cwd = process.cwd();
 
+    console.log(clc.green.bold('_extractDependencies - starts, path = ' + storagePath));
 
-    console.log(clc.green.bold('extractDependencies - starts, path = ' + storagePath));
+    var promisesArray = self._dependenciesFolders.map(function (name, index) {
+        return new Promise(function(resolve, reject) {
+            var cacheFilePath = path.resolve(storagePath, self._getCacheFileName(index)),
+                destFolderPath = path.resolve(cwd, name);
 
-    return new Promise(function(resolve, reject) {
-        var promisesArray = self._dependenciesFolders.map(function (name, index) {
-            return new Promise(function(resolve, reject) {
-                var cacheFilePath = path.resolve(storagePath, self._getCacheFileName(index)),
-                    destFolderPath = path.resolve(cwd, name);
+            console.log('Extract ' + cacheFilePath + ' -> ' + destFolderPath);
 
-                console.log('Extract ' + cacheFilePath + ' -> ' + destFolderPath);
-                fs.createReadStream(cacheFilePath).pipe(tar.extract(destFolderPath))
-                    .on('finish', function() {
-                        console.log(clc.green('extract dependencies: finish ' + destFolderPath));
-                        resolve();
-                    })
-                    .on('error', function (err) {
-                        console.log(err);
-                        console.log(clc.red('error extract dependencies ' + destFolderPath));
-                        reject(err)
-                    })
-            })
-        });
-
-        Promise.all(promisesArray).then(
-            function() {
-                console.log(clc.green.bold('extract dependencies: finish all'));
-                resolve();
-            },
-            function (err) {
-                console.log(clc.red.bold('error extract dependencies'));
-                console.log(err);
-                reject(err);
-            }
-        );
+            fs.createReadStream(cacheFilePath).pipe(tar.extract(destFolderPath))
+                .on('finish', function() {
+                    console.log(clc.green('extract dependencies: finish ' + destFolderPath));
+                    resolve();
+                })
+                .on('error', function (err) {
+                    errorLog('error extract dependencies ' + destFolderPath, err);
+                    reject(err)
+                })
+        })
     });
+
+    return Promise.all(promisesArray)
+        .then(function() {
+            console.log(clc.green.bold('extract dependencies: finish all'));
+
+            return true;
+        })
+        .catch(function(err) {
+            errorLog('error extract dependencies', err);
+
+            return Promise.reject(err);
+        });
 
 };
 
@@ -472,7 +518,7 @@ Zlo.prototype.extractDependencies = function(storagePath) {
  * @param fromPath
  * @param toPath
  */
-Zlo.prototype.copyArchives = function (fromPath, toPath) {
+Zlo.prototype._copyArchives = function (fromPath, toPath) {
     var self = this;
 
     return Promise.all(self._cacheFileNames.map(function (cacheName) {
@@ -484,7 +530,7 @@ Zlo.prototype.copyArchives = function (fromPath, toPath) {
         return new Promise(function(resolve, reject) {
             fs.copy(startParh, endParh, function (err) {
                 if (err) {
-                    console.log(clc.red('error copy ' + startParh + ' --> ' + endParh));
+                    errorLog('error copy ' + startParh + ' --> ' + endParh, err);
                     reject();
                 } else {
                     console.log(clc.green('success copy ' + startParh + ' --> ' + endParh));
@@ -499,80 +545,55 @@ Zlo.prototype.copyArchives = function (fromPath, toPath) {
 /**
  * Записываем свежесозданный архив в svn
  */
-Zlo.prototype.putToSvn = function() {
+Zlo.prototype._putToSvn = function() {
     var self = this;
 
     console.log(clc.green('Put to svn'));
 
-    return new Promise(function(resolve, reject) {
-        if (!self._svnData) {
-            console.log(clc.yellow('SVN url not defined'));
+    if (!self._svnData) {
+        console.log(clc.yellow('SVN url not defined'));
 
-            reject();
+        return Promise.reject('SVN url not defined');
+    }
 
-            return;
-        }
+    //проверяем есть ли уже файлы в репозитории
 
-        //проверяем есть ли уже файлы в репозитории
-        self.checkCashesInSVN(function (err, isFilesExists) {
-            if (err) {
-                reject();
-
-                return;
-            }
-
+    return self._checkCashesInSVN()
+        .then(function(isFilesExists) {
             if (isFilesExists) {
                 console.log(clc.green('Files already in SVN'));
-
-                resolve();
-
-                return;
-            }
-
-            self._checkoutSVN('empty', [], function (err) {
-                if (err) {
-                    reject();
-
-                    return;
-                }
-
-
-                self.copyArchives(self._localStoragePath, self._svnData.path).then(
-                    function () {
+                return true;
+            } else {
+                return self._checkoutSVN('empty', [])
+                    .then(function() {
+                        return self._copyArchives(self._localStoragePath, self._svnData.path);
+                    })
+                    .then(function() {
                         console.log(clc.green('Archives successfully copy to ' + self._svnData.path));
 
-                        self._doCmd(self._svnData.path, 'svn add ' + self._cacheFileNames.join(' '), function(err, data) {
-                            if (err) {
-                                console.error(err);
-                                reject();
-                                return;
-                            }
-                            console.log(clc.green('all local changes has been added for commit'));
+                        return self._doCmd(self._svnData.path, 'svn add ' + self._cacheFileNames.join(' '));
+                    })
+                    .then(function() {
+                        return self._doCmd(self._svnData.path, 'svn commit -m "zlo: add direct cache"');
+                    })
+                    .then(function() {
+                        console.log(clc.green('local changes has been committed!'));
 
-                            self._doCmd(self._svnData.path, 'svn commit -m "zlo: add direct cache"', function(err, data) {
-                                if (err) {
-                                    console.error(err);
-                                    reject();
+                        return true;
+                    });
+            }
+        })
+        .catch(function(err) {
+            errorLog('_checkCashesInSVN', err);
 
-                                    return;
-                                }
-                                resolve();
-                                console.log(clc.green('local changes has been committed!'));
-                            });
-                        });
-                    }
-                );
-            });
-
+            Promise.reject(err);
         });
-
-    });
 };
 
 /**
  * Удаляем ненужные конфиги и временные файлы
  */
-Zlo.prototype.doCleanup = function() {
+Zlo.prototype._doCleanup = function() {
     var cwd = process.cwd();
 
     console.log(clc.green('Remove tmp files and folders'));
@@ -580,22 +601,22 @@ Zlo.prototype.doCleanup = function() {
     fs.remove(this._svnData.path);
 
     fs.remove(path.resolve(cwd, '.bowerrc'), function(err) {
-        if (err) console.error(err);
+        if (err) errorLog('Remove .bowerrc', err);
     });
     fs.remove(path.resolve(cwd, NPM_CONFIG_NAME), function(err) {
-        if (err) console.error(err);
+        if (err) errorLog('Remove ' + NPM_CONFIG_NAME, err);
     });
     fs.remove(path.resolve(cwd, BOWER_CONFIG_NAME), function(err) {
-        if (err) console.error(err);
+        if (err) errorLog('Remove ' + BOWER_CONFIG_NAME, err);
     });
 };
 
 /**
  * Действия, выполняемые после успешной загрузки зависимостей
  */
-Zlo.prototype.onLoadSuccess = function() {
+Zlo.prototype._onLoadSuccess = function() {
     var self = this;
-    console.log('---------------------onLoadSuccess');
+
     if (this._postinstall && this._postinstall.length > 0) {
         console.log(clc.green('Doing postinstall'));
         Promise.all(this._postinstall.map(function(postinstall) {
@@ -603,9 +624,9 @@ Zlo.prototype.onLoadSuccess = function() {
                 console.log('posintall: ' + postinstall.command);
                 exec(postinstall.command, function(err, stdout) {
                     if (err) {
-                        console.log(err);
+                        errorLog('postinstall', err);
                         reject();
-                        self.doCleanup();
+                        self._doCleanup();
                     } else {
                         console.log(stdout);
                         resolve();
@@ -618,28 +639,29 @@ Zlo.prototype.onLoadSuccess = function() {
 
             },
             function (err) {
-                console.log(clc.red('postinstall error'));
+                errorLog('postinstall error');
             }
         )
     } else {
-        this.doCleanup();
+        this._doCleanup();
     }
 };
 
-Zlo.prototype.tryPutToSvn = function() {
+Zlo.prototype._tryPutToSvn = function() {
     var self = this;
 
-    return this.putToSvn().then(
-        function () {
+    return this._putToSvn()
+        .then(function (stdout) {
             console.log(clc.green.bold('Dependencies committed to SVN cache'));
-            self.onLoadSuccess();
-        },
-        function (err) {
-            console.log(clc.err.bold('Error: dependencies not committed to SVN cache'));
+
+            self._onLoadSuccess();
+        })
+        .catch(function(err) {
+            errorLog('dependencies not committed to SVN cache', err);
+
             //не смогли положить в svn - но почистить за собой нужно
-            self.onLoadSuccess();
-        }
-    );
+            self._onLoadSuccess();
+        });
 };
 
 /**
@@ -648,47 +670,45 @@ Zlo.prototype.tryPutToSvn = function() {
 Zlo.prototype.loadDependencies = function() {
     var self = this;
 
-    return self.loadFromLocalCache().then(
-        function() {
-            return self.tryPutToSvn();
-        },
-        function (err) {
-            return self.loadFromSVNCache().then(
-                function () {
-                    console.log('loadFromSVNCache');
-                    //если данные загрузились из svn - копируем их в локальный кэш
-                    return self.copyArchives(self._svnData.path, self._localStoragePath)
-                        .then(
-                            function () {
-                                self.onLoadSuccess();
-                            },
-                            function(err) {
-                                console.log(err);
-                            }
-                        );
-                },
-                function (err) {
-                    return self.loadFromNet().then(
-                        function() {
-                            return self.archiveDependencies().then(
-                                function() { console.log(clc.green('Dependencies successfuly archived')); },
-                                function(err) { console.log(clc.red('Can not archive dependencies')); }
-                            );
-                        },
-                        function (err) {
-                            console.log(clc.red('Can not load dependencies!!!'));
+    return self._loadFromLocalCache()
+        .then(function() {
+            return self._tryPutToSvn();
+        })
+        .catch(function(err) {
+            errorLog('Load from local cache error', err);
 
-                            process.exit(0);
-                        }
-                    ).then(function() {
-                        return self.tryPutToSvn();
-                    }).catch(function() {
-                        console.log(err);
-                    });
-                }
-            );
-        }
-    );
+            return self._loadFromSVNCache()
+                .then(function(stdout) {
+                    console.log(clc.blue('Load from local svn success: ') + stdout);
+                    //если данные загрузились из svn - копируем их в локальный кэш
+                    return self._copyArchives(self._svnData.path, self._localStoragePath)
+                        .then(function () {
+                            self._onLoadSuccess();
+                        })
+                        .catch(function(err) {
+                            errorLog('Copy archives', err);
+
+                            return Promise.reject(err);
+                        })
+                })
+                .catch(function(err) {
+                    errorLog('Load from local svn', err);
+
+                    return self._loadFromNet()
+                        .then(function() {
+                            return self.archiveDependencies();
+                        })
+                        .then(function() {
+                            return self._tryPutToSvn();
+                        })
+                        .catch(function(err) {
+                            errorLog('Can not load dependencies!!!', err);
+
+                            return Promise.reject(err);
+                        });
+                })
+        });
+
 };
 
 /**
@@ -696,41 +716,30 @@ Zlo.prototype.loadDependencies = function() {
  * @returns {Promise}
  */
 
-Zlo.prototype.loadFromLocalCache = function() {
+Zlo.prototype._loadFromLocalCache = function() {
     var self = this;
 
     console.log(clc.green.bold('Load from local cache'));
 
     if (!self._localStoragePath) {
-        console.log(clc.yellow('Can not load from local cache. Cache path not defined'));
-
         return Promise.reject('Can not load from local cache. Cache path not defined');
     }
 
-    if (_.every(self._cacheFileNames, function (name) {
-            var filePath = path.resolve(self._localStoragePath, name);
-
-            console.log(filePath + ' exists: ' + fs.existsSync(filePath));
-
-            return fs.existsSync(filePath);
-        })) {
+    if (self._isFilesExistsInDir(self._localStoragePath)) {
         console.log(clc.green('Files ' + self._cacheFileNames + ' found in local storage'));
 
-        return self.extractDependencies(self._localStoragePath).then(
-            function () {
+        return self._extractDependencies(self._localStoragePath)
+            .then(function() {
                 console.log(clc.green.bold('Dependencies succesfully retrive from local strorafe'));
 
                 return Promise.resolve();
-            },
-            function (err) {
-                console.log(clc.yellow('Can not load files from local strorafe'));
+            })
+            .catch(function(err) {
+                console.log(err);
 
-                return Promise.reject();
-            }
-        );
+                return Promise.reject('Can not load files from local storage');
+            });
     } else {
-        console.log(clc.yellow('Files ' + self._cacheFileNames + ' not exists in local storage'));
-
         return Promise.reject('Files ' + self._cacheFileNames + ' not exists in local storage');
     }
 
@@ -740,60 +749,34 @@ Zlo.prototype.loadFromLocalCache = function() {
  * Пытаемся загрузить зависимости из svn
  * @returns {Promise}
  */
-Zlo.prototype.loadFromSVNCache = function() {
+Zlo.prototype._loadFromSVNCache = function() {
     var self = this;
 
     console.log(clc.green.bold('Load from svn cache'));
     //svn у нас уже счекаучен в режиме --depth empty
 
     if (!self._svnData) {
-        console.log(clc.yellow('SVN cache not defined'));
-
         return Promise.reject('SVN cache not defined');
     }
 
-    return new Promise(function (resolve, reject) {
-        //проверяем есть ли уже файлы в репозитории
-        self.checkCashesInSVN(function (err, isFilesExists) {
-            if (err || !isFilesExists) {
-                //если файлов нет - то и забирать нечего, будем пробовать другие варианты
-                console.log(clc.yellow('Can not load files from SVN'));
-                reject();
-
-                return;
+    return self._checkCashesInSVN()
+        .then(function(isFilesExists) {
+            if (!isFilesExists) {
+                return Promise.reject('Can not load files from svn: no files in svn');
             }
 
-            console.log('Retrive files from SVN');
+            return self._checkoutSVN('empty', self._cacheFileNames)
+                .then(function() {
+                    return self._extractDependencies(self._svnData.path);
+                })
+                .then(function() {
+                    console.log(clc.green.bold('Dependencies succesfully retrive from SVN'));
 
-            self._checkoutSVN('empty', self._cacheFileNames, function (err) {
-                if (err) {
-                    reject();
+                    return true;
+                })
+        })
+        .catch(function(err) {
 
-                    return;
-                }
-
-                //проверяем что файлы дейсвительно успешно загрузились c удаленного репозитория
-                if (_.every(self._cacheFileNames, function (name) {
-                        return fs.existsSync(path.resolve(self._svnData.path, name));
-                    })) {
-                    self.extractDependencies(self._svnData.path).then(
-                        function() {
-                            console.log(clc.green.bold('Dependencies succesfully retrive from SVN'));
-                            resolve();
-                        },
-                        function (err) {
-                            console.log(clc.yellow('Can not load files from SVN'));
-                            reject(err);
-                        }
-                    );
-                } else {
-                    console.log(clc.yellow('Can not load files from SVN'));
-                    reject();
-                }
-
-            });
-
+            return Promise.reject(err);
         });
-    });
-
 };

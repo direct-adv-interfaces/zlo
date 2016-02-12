@@ -11,6 +11,7 @@ var Zlo = require('../zlo'),
         properties: ["spy", "stub", "mock", "clock", "server", "requests"],
         useFakeTimers: true
     }),
+    doCmdStub,
     zlo;
 
 var exit = process.exit;
@@ -40,6 +41,73 @@ describe('Base API', function() {
     });
 });
 
+function svnProcessTestGroup() {
+    it('Проверяем наличие зависимостей в svn', function(done) {
+        var checkCashesInSVNStub = sandbox.stub(Zlo.prototype, '_checkCashesInSVN', function() {
+            console.log(clc.blue('-- stub --->_checkCashesInSVN'));
+
+            return Promise.resolve(true);
+        });
+
+        zlo.loadDependencies().then(function() {
+            try {
+                expect(checkCashesInSVNStub.called).to.be.true;
+                done()
+            } catch(e) {
+                done(e)
+            }
+
+        });
+    });
+
+    it('Если зависимостей нет в svn - кладем', function(done) {
+
+        //стабим  _checkCashesInSVN чтобы копировало в архивную папку
+        sandbox.stub(Zlo.prototype, '_checkCashesInSVN', function() {
+            console.log(clc.blue('-- stub --->_checkCashesInSVN'));
+            return Promise.resolve(false);
+        });
+
+
+        zlo.loadDependencies().then(function() {
+            try {
+                //счекаутили директорию
+                expect(doCmdStub.firstCall.args[1]).to.have.string('svn checkout');
+                //добавили
+                expect(doCmdStub.secondCall.args[1]).to.have.string('svn add');
+                //закоммитили
+                expect(doCmdStub.thirdCall.args[1]).to.have.string('svn commit');
+
+                done()
+            } catch(e) {
+                done(e)
+            }
+        });
+    });
+}
+
+function onLoadSuccessTestGroup() {
+    it('Если успешно положили в svn - выполняем _onLoadSuccess', function(done) {
+        var successSpy = sandbox.spy(Zlo.prototype, '_onLoadSuccess');
+
+        sandbox.stub(Zlo.prototype, '_putToSvn', function() {
+            console.log(clc.blue('-- stub --->_putToSvn'));
+
+            return Promise.resolve();
+        });
+
+        zlo.loadDependencies().then(function() {
+            try {
+                expect(successSpy.called).to.be.true;
+
+                done()
+            } catch(e) {
+                done(e)
+            }
+        });
+    });
+}
+
 describe('Выход с ошибкой если в Zlo не переданы параметры при создании', function() {
     var processSpy,
         errorLogSpy;
@@ -56,7 +124,7 @@ describe('Выход с ошибкой если в Zlo не переданы п�
     it('В конфиге не передано поле storage', function() {
         zlo = new Zlo({});
 
-        expect(errorLogSpy.calledWith(clc.red('Empty local storage path'))).to.be.true;
+        expect(errorLogSpy.calledWith(clc.red('ERROR: Empty local storage path'))).to.be.true;
         expect(processSpy.calledWith(0)).to.be.true;
     });
 
@@ -64,21 +132,21 @@ describe('Выход с ошибкой если в Zlo не переданы п�
     it('В конфиге не передано поле storage без поля svn - Empty local storage path', function() {
         zlo = new Zlo({ storage: { local: 'local' }});
 
-        expect(errorLogSpy.calledWith(clc.red('Empty local storage path'))).to.be.true;
+        expect(errorLogSpy.calledWith(clc.red('ERROR: Empty local storage path'))).to.be.true;
         expect(processSpy.calledWith(0)).to.be.true;
     });
 
     it('В конфиге не передано поле storage без поля local - Empty local storage path', function() {
         zlo = new Zlo({ storage: { svn: 'svn' }});
 
-        expect(errorLogSpy.calledWith(clc.red('Empty local storage path'))).to.be.true;
+        expect(errorLogSpy.calledWith(clc.red('ERROR: Empty local storage path'))).to.be.true;
         expect(processSpy.calledWith(0)).to.be.true;
     });
 
     it('В конфиге не передано поле storage с svn и svn, но не передано dependencies - Empty dependencies', function() {
         zlo = new Zlo({ storage: { svn: 'svn', local: 'local' }});
 
-        expect(errorLogSpy.calledWith(clc.red('Empty dependencies'))).to.be.true;
+        expect(errorLogSpy.calledWith(clc.red('ERROR: Empty dependencies'))).to.be.true;
         expect(processSpy.calledWith(0)).to.be.true;
     });
 
@@ -146,8 +214,7 @@ describe('Выход с ошибкой если в Zlo не переданы п�
 });
 
 describe('Загрузка зависимостей', function() {
-    var doCmdStub,
-        putToSvnStub,
+    var putToSvnStub,
         copyArchStub;
 
     beforeEach(function() {
@@ -169,14 +236,14 @@ describe('Загрузка зависимостей', function() {
         });
 
         //стабим методы, успешное выполнение которых нам необходимо для продолжения тестирования
-        doCmdStub = sandbox.stub(Zlo.prototype, '_doCmd', function(path, cmd, callback) {
+        doCmdStub = sandbox.stub(Zlo.prototype, '_doCmd', function(path, cmd) {
             console.log(clc.blue('-- stub ---> doCmd: ' + cmd));
 
-            return callback(null, {});
+            return Promise.resolve();
         });
 
-        copyArchStub = sandbox.stub(Zlo.prototype, 'copyArchives', function(path, cmd, callback) {
-            console.log(clc.blue('-- stub ---> copyArchives'));
+        copyArchStub = sandbox.stub(Zlo.prototype, '_copyArchives', function(path, cmd) {
+            console.log(clc.blue('-- stub ---> _copyArchives'));
 
             return Promise.resolve();
         });
@@ -190,10 +257,10 @@ describe('Загрузка зависимостей', function() {
 
     describe('Успешная загрузка из локального кэша', function() {
 
-        // loadDependencies -> loadFromLocalCache().putToSvn
+        // loadDependencies -> _loadFromLocalCache()._putToSvn
         beforeEach(function() {
-            sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
-                console.log(clc.blue('-- stub --->loadFromLocalCache'));
+            sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
+                console.log(clc.blue('-- stub --->_loadFromLocalCache'));
                 return Promise.resolve();
             });
 
@@ -205,8 +272,8 @@ describe('Загрузка зависимостей', function() {
         });
 
         it('Пытаемся положить зависимости в svn', function(done) {
-            putToSvnStub = sandbox.stub(Zlo.prototype, 'putToSvn', function() {
-                console.log(clc.blue('-- stub --->putToSvn'));
+            putToSvnStub = sandbox.stub(Zlo.prototype, '_putToSvn', function() {
+                console.log(clc.blue('-- stub --->_putToSvn'));
                 return Promise.resolve();
             });
 
@@ -221,76 +288,19 @@ describe('Загрузка зависимостей', function() {
             });
         });
 
-        it('Проверяем наличие зависимостей в svn', function(done) {
-            var checkCashesInSVNStub = sandbox.stub(Zlo.prototype, 'checkCashesInSVN', function(callback) {
-                console.log(clc.blue('-- stub --->checkCashesInSVN'));
-                callback(null, true);
-            });
+        svnProcessTestGroup();
 
-            zlo.loadDependencies().then(function() {
-                try {
-                    expect(checkCashesInSVNStub.called).to.be.true;
-                    done()
-                } catch(e) {
-                    done(e)
-                }
-
-            });
-        });
-
-        it('Если зависимостей нет в svn - кладем', function(done) {
-
-            //стабим  checkCashesInSVN чтобы копировало в архивную папку
-            sandbox.stub(Zlo.prototype, 'checkCashesInSVN', function(callback) {
-                console.log(clc.blue('-- stub --->checkCashesInSVN'));
-                callback(null, false);
-            });
-
-
-            zlo.loadDependencies().then(function() {
-                try {
-                    //счекаутили директорию
-                    expect(doCmdStub.firstCall.args[1]).to.have.string('svn checkout');
-                    //добавили
-                    expect(doCmdStub.secondCall.args[1]).to.have.string('svn add');
-                    //закоммитили
-                    expect(doCmdStub.thirdCall.args[1]).to.have.string('svn commit');
-
-                    done()
-                } catch(e) {
-                    done(e)
-                }
-            });
-        });
-
-        it('Если успешно положили в svn - выполняем onLoadSuccess', function(done) {
-            var successSpy = sandbox.spy(Zlo.prototype, 'onLoadSuccess');
-
-            sandbox.stub(Zlo.prototype, 'putToSvn', function() {
-                console.log(clc.blue('-- stub --->putToSvn'));
-                return Promise.resolve();
-            });
-
-            zlo.loadDependencies().then(function() {
-                try {
-                    expect(successSpy.called).to.be.true;
-
-                    done()
-                } catch(e) {
-                    done(e)
-                }
-            });
-        });
+        onLoadSuccessTestGroup();
     });
 
     it('Не удалось загрузить зависимости из локального кэша - грузим из svn', function(done) {
-        sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
-            console.log(clc.blue('-- stub --->loadFromLocalCache'));
+        sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
+            console.log(clc.blue('-- stub --->_loadFromLocalCache'));
 
             return Promise.reject();
         });
 
-        var loadFromSvnStub = sandbox.stub(Zlo.prototype, 'loadFromSVNCache', function() {
+        var loadFromSvnStub = sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
             return Promise.resolve();
         });
 
@@ -307,13 +317,13 @@ describe('Загрузка зависимостей', function() {
 
     describe('Успешная загрузка из svn', function() {
         beforeEach(function() {
-            sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
-                console.log(clc.blue('-- stub --->loadFromLocalCache'));
+            sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
+                console.log(clc.blue('-- stub --->_loadFromLocalCache'));
 
                 return Promise.reject();
             });
-            sandbox.stub(Zlo.prototype, 'loadFromSVNCache', function() {
-                console.log(clc.blue('-- stub --->loadFromSVNCache'));
+            sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
+                console.log(clc.blue('-- stub --->_loadFromSVNCache'));
 
                 return Promise.resolve();
             });
@@ -335,8 +345,8 @@ describe('Загрузка зависимостей', function() {
             });
         });
 
-        it('Выполняем действия onLoadSuccess', function(done) {
-            var onLoadSuccessSpy = sandbox.spy(Zlo.prototype, 'onLoadSuccess');
+        it('Выполняем действия _onLoadSuccess', function(done) {
+            var onLoadSuccessSpy = sandbox.spy(Zlo.prototype, '_onLoadSuccess');
 
 
             zlo.loadDependencies().then(function() {
@@ -352,24 +362,27 @@ describe('Загрузка зависимостей', function() {
     });
 
     it('Не удалось загрузить зависимости из svn - грузим из сети', function(done) {
-        sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
-            console.log(clc.blue('-- stub --->loadFromLocalCache'));
+        sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
+            console.log(clc.blue('-- stub --->_loadFromLocalCache'));
 
             return Promise.reject();
         });
 
-        sandbox.stub(Zlo.prototype, 'loadFromSVNCache', function() {
-            console.log(clc.blue('-- stub --->loadFromSVNCache'));
+        sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
+            console.log(clc.blue('-- stub --->_loadFromSVNCache'));
 
             return Promise.reject();
         });
 
-        var loadFromNetStub = sandbox.stub(Zlo.prototype, 'loadFromNet', function() {
+        var loadFromNetStub = sandbox.stub(Zlo.prototype, '_loadFromNet', function() {
             //закругляемся - в этом кейсе проверять больше нечего
             return Promise.reject();
         });
 
         zlo.loadDependencies().then(function() {
+
+        }).catch(function() {
+            //т.к. завершили c reject - проверяем с catch
             try {
                 expect(loadFromNetStub.called).to.be.true;
 
@@ -384,19 +397,19 @@ describe('Загрузка зависимостей', function() {
         var archiveDependenciesStub;
 
         beforeEach(function() {
-            sandbox.stub(Zlo.prototype, 'loadFromLocalCache', function() {
-                console.log(clc.blue('-- stub --->loadFromLocalCache'));
+            sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
+                console.log(clc.blue('-- stub --->_loadFromLocalCache'));
 
                 return Promise.reject();
             });
-            sandbox.stub(Zlo.prototype, 'loadFromSVNCache', function() {
-                console.log(clc.blue('-- stub --->loadFromSVNCache'));
+            sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
+                console.log(clc.blue('-- stub --->_loadFromSVNCache'));
 
                 return Promise.reject();
             });
 
-            sandbox.stub(Zlo.prototype, 'loadFromNet', function() {
-                console.log(clc.blue('-- stub --->loadFromNet'));
+            sandbox.stub(Zlo.prototype, '_loadFromNet', function() {
+                console.log(clc.blue('-- stub --->_loadFromNet'));
 
                 return Promise.resolve();
             });
@@ -424,66 +437,9 @@ describe('Загрузка зависимостей', function() {
             });
         });
 
-        it('Проверяем наличие зависимостей в svn', function(done) {
-            var checkCashesInSVNStub = sandbox.stub(Zlo.prototype, 'checkCashesInSVN', function(callback) {
-                console.log(clc.blue('-- stub --->checkCashesInSVN'));
-                callback(null, true);
-            });
+        svnProcessTestGroup();
 
-            zlo.loadDependencies().then(function() {
-                try {
-                    expect(checkCashesInSVNStub.called).to.be.true;
-                    done()
-                } catch(e) {
-                    done(e)
-                }
-
-            });
-        });
-
-        it('Если зависимостей нет в svn - кладем', function(done) {
-
-            //стабим  checkCashesInSVN чтобы копировало в архивную папку
-            sandbox.stub(Zlo.prototype, 'checkCashesInSVN', function(callback) {
-                console.log(clc.blue('-- stub --->checkCashesInSVN'));
-                callback(null, false);
-            });
-
-
-            zlo.loadDependencies().then(function() {
-                try {
-                    //счекаутили директорию
-                    expect(doCmdStub.firstCall.args[1]).to.have.string('svn checkout');
-                    //добавили
-                    expect(doCmdStub.secondCall.args[1]).to.have.string('svn add');
-                    //закоммитили
-                    expect(doCmdStub.thirdCall.args[1]).to.have.string('svn commit');
-
-                    done()
-                } catch(e) {
-                    done(e)
-                }
-            });
-        });
-
-        it('Если успешно положили в svn - выполняем onLoadSuccess', function(done) {
-            var successSpy = sandbox.spy(Zlo.prototype, 'onLoadSuccess');
-
-            sandbox.stub(Zlo.prototype, 'putToSvn', function() {
-                console.log(clc.blue('-- stub --->putToSvn'));
-                return Promise.resolve();
-            });
-
-            zlo.loadDependencies().then(function() {
-                try {
-                    expect(successSpy.called).to.be.true;
-
-                    done()
-                } catch(e) {
-                    done(e)
-                }
-            });
-        });
+        onLoadSuccessTestGroup();
     });
 
 });

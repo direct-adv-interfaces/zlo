@@ -25,7 +25,7 @@ if (program.kill) {
 } else if (program.killAllSvn) {
     zlo.killAll({ svnOnly: true });
 } else if (program.test) {
-    zlo.loadFromLocalCache('./bem-local-libs');
+    zlo._loadFromLocalCache('./bem-local-libs');
 } else if (program.createConfig) {
     zlo.createConfigs();
 } else {
