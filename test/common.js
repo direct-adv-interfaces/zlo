@@ -2,7 +2,7 @@ global.chai = require('chai');
 global.sinon = require('sinon');
 global.expect = global.chai.expect;
 
-var Zlo = require('../zlo'),
+var Zlo = require('../lib/zlo'),
     clc = require('cli-color'),
     fs = require('fs-extra'),
     path = require('path'),
@@ -414,7 +414,7 @@ describe('Загрузка зависимостей', function() {
                 return Promise.resolve();
             });
 
-            archiveDependenciesStub = sandbox.stub(Zlo.prototype, 'archiveDependencies', function() {
+            archiveDependenciesStub = sandbox.stub(Zlo.prototype, '_archiveDependencies', function() {
                 return Promise.resolve();
             })
 

@@ -55,7 +55,27 @@ resolutions - рекомендации для bower'а по разрешению
 попробуйте запустить `node utils/zlo --create-config; bower install` - возможно в вашем конфиге есть зависимости, которые
 bower не может разрешить автоматически. Такие зависимости нужно занести в resolutions в  zlo.json
 
+## debian
+In `zlo` directory install npm2debian
+`npm install npm2debian`
 
+Run
+`./node_modules/.bin/npm2debian --package-prefix="yandex-du-" --registry=http://npm.yandex-team.ru/ --versioned zlo`
+
+Go to directory
+`cd yandex-du-zlo-*`
+
+Change in file `debian/rules` line `npm install --dev` to `npm install --production`
+
+
+Build deb package
+
+```
+debuild
+debrelease
+```
+
+Install package with `beta-update`
 
 ##Пример##
 Вызов из командной строки
