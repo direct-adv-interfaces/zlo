@@ -1,7 +1,6 @@
 {
   "name": "zlo",
-  "version": "0.0.1",
-  "main": "./cli.js",
+  "version": "0.3.0",
   "author": "heliarian",
   "description": "is a command line utility for caching dependencies",
   "repository": {
