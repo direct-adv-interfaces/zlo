@@ -21,7 +21,7 @@
     {
          "storage": {
              "local": "./bem-local-libs/",
-             "svn": "svn+ssh://svn.yandex.ru/direct-bem-local-libs"
+             "svn": "svn+ssh://svn.my-svn.ru/svn-cache"
          },
          "resolutions": {
              "bem-bl": "2.5.1",
