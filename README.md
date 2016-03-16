@@ -55,6 +55,16 @@ resolutions - рекомендации для bower'а по разрешению
 попробуйте запустить `node utils/zlo --create-config; bower install` - возможно в вашем конфиге есть зависимости, которые
 bower не может разрешить автоматически. Такие зависимости нужно занести в resolutions в  zlo.json
 
+
+#Release
+##npm
+
+Increment version npm version [<newversion> | major | minor | patch ]
+
+Push changes to git git push origin master --tags
+
+Publish new version to registry npm publish --registry=http://npm.yandex-team.ru/
+
 ## debian
 In `zlo` directory install npm2debian
 `npm install npm2debian`
