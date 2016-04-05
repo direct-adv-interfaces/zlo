@@ -10,7 +10,7 @@
 
 
 ###Автор###
-[heliarian ](https://staff.yandex-team.ru/heliarian )
+[heliarian ](heliarian@yandex-team.ru)
 
 ##Как пользоваться и расширять##
 В корне директории из которой будет запускаться утилита необходимо создать файлы:
