@@ -25,12 +25,12 @@
     {
          "localCachePath": "local-dependencies",
          "svnCachePath": "svn+ssh://svn.my-svn.ru/dependencies"
-         "loadingTimeout": 10000
+         "loadTimeout": 10000
      }
 
 ```
 localCachePath - папка для хранения локального кэша
 svnCachePath - путь к svn-репозиторию в котором хранится кэш
-loadingTimeout - максимально-допустимое время установки зависимостей по истечению которого установка прекращается
+loadTimeout - максимально-допустимое время установки зависимостей по истечению которого установка прекращается
 
 package.json - файл, по которому npm будет устанавливать зависимости
