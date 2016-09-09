@@ -1,6 +1,6 @@
 {
-  "name": "zlo",
-  "version": "0.5.0",
+  "name": "zlo5",
+  "version": "0.5.1",
   "author": "heliarian",
   "description": "is a command line utility for caching dependencies",
   "repository": {
@@ -26,7 +26,7 @@
     "sinon": "1.17.2"
   },
   "bin": {
-    "zlo": "./bin/zlo"
+    "zlo5": "./bin/zlo5"
   },
   "scripts": {
     "test": "node ./node_modules/mocha/bin/mocha test/common"
