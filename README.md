@@ -12,6 +12,8 @@
 
 `node utils/zlo5 --dev` - сборка в dev-режиме
 
+`npm test`  - запуск тестов
+
 
 ###Автор###
 [heliarian ]<heliarian@yandex-team.ru>
