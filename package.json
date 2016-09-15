@@ -1,6 +1,6 @@
 {
   "name": "zlo5",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "author": "heliarian",
   "description": "is a command line utility for caching dependencies",
   "repository": {
