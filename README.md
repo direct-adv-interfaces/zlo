@@ -26,7 +26,9 @@
 
     {
          "localCachePath": "local-dependencies",
-         "svnCachePath": "svn+ssh://svn.my-svn.ru/dependencies"
+         "svnCachePath": "svn+ssh://svn.my-svn.ru/dependencies",
+         "nodePath": "/opt/nodejs/bin/node",
+         "useYarn": false,
          "loadTimeout": 10000
      }
 
@@ -34,5 +36,7 @@
 localCachePath - папка для хранения локального кэша
 svnCachePath - путь к svn-репозиторию в котором хранится кэш
 loadTimeout - максимально-допустимое время установки зависимостей по истечению которого установка прекращается
+useYarn - использовать Yarn для сборки пакетов (по умолчанию используется npm)
+nodePath - путь к node (если используется кастомный)
 
 package.json - файл, по которому npm будет устанавливать зависимости
