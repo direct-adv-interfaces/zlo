@@ -4,13 +4,13 @@
 Утилита для кэширования зависимостей
 Выкачивает из npm зависимости для модуля, запаковывает результат в архив и кладет архив в svn
 
-`node utils/zlo5 --kill`  - очистка md-файла для данного zlo.json
+`node zlo --kill`  - очистка md-файла для данного zlo.json
 
-`node utils/zlo5 --kill-all`  - очистка всего кэша
+`node zlo --kill-all`  - очистка всего кэша
 
-`node utils/zlo5 --verbose` - запуск zlo с выводом подробных логов
+`node zlo --verbose` - запуск zlo с выводом подробных логов
 
-`node utils/zlo5 --dev` - сборка в dev-режиме
+`node zlo --dev` - сборка в dev-режиме
 
 `npm test`  - запуск тестов
 

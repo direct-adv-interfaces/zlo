@@ -1,5 +1,5 @@
 {
-  "name": "zlo5",
+  "name": "zlo",
   "version": "0.5.3",
   "author": "heliarian",
   "description": "is a command line utility for caching dependencies",
@@ -27,7 +27,7 @@
     "chai-as-promised": "5.3.0"
   },
   "bin": {
-    "zlo5": "./bin/zlo5"
+    "zlo": "./bin/zlo"
   },
   "scripts": {
     "test": "node ./node_modules/mocha/bin/mocha test/common"
