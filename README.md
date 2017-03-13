@@ -4,9 +4,11 @@
 Утилита для кэширования зависимостей
 Выкачивает из npm зависимости для модуля, запаковывает результат в архив и кладет архив в svn
 
-`node zlo --kill`  - очистка md-файла для данного zlo.json
+`node zlo --kill --target=['svn'|'local']`  - очистка md-файла для данного zlo.json
 
-`node zlo --kill-all`  - очистка всего кэша
+`node zlo --kill-all --target=['svn'|'local']`  - очистка всего кэша
+
+`node zlo --kill-all-except-current --target=['svn'|'local']`  - очистка всего кэша кроме текущего
 
 `node zlo --verbose` - запуск zlo с выводом подробных логов
 
