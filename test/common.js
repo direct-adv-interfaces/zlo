@@ -175,7 +175,7 @@ describe('Загрузка зависимостей', function() {
             });
 
             it('Пытаемся загрузить данные из npm', function() {
-                var npmStub = sandbox.stub(Zlo.prototype, '_loadFromNPM', function() {
+                var npmStub = sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
                     return Promise.resolve();
                 });
 
@@ -186,7 +186,7 @@ describe('Загрузка зависимостей', function() {
 
             describe('Если данные из npm загрузились', function() {
                 beforeEach(function() {
-                    sandbox.stub(Zlo.prototype, '_loadFromNPM', function() {
+                    sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
                         return Promise.resolve();
                     });
                 });
@@ -206,7 +206,7 @@ describe('Загрузка зависимостей', function() {
                 var endFailStub;
 
                 beforeEach(function() {
-                    sandbox.stub(Zlo.prototype, '_loadFromNPM', function() {
+                    sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
                         return Promise.reject();
                     });
 

@@ -3,10 +3,7 @@
   "version": "0.5.7",
   "author": "heliarian",
   "description": "is a command line utility for caching dependencies",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/heliarian/zlo.git"
-  },
+  "repository": "https://github.com/heliarian/zlo.git",
   "dependencies": {
     "colors": "1.1.2",
     "commander": "2.5.0",
@@ -17,19 +14,22 @@
     "promise": "7.1.1",
     "tar-fs": "1.9.0",
     "tracer": "0.8.3",
-    "xml2js": "0.4.16"
+    "xml2js": "0.4.16",
+    "yarn": "0.19.1"
   },
   "devDependencies": {
     "chai": "3.4.1",
+    "chai-as-promised": "5.3.0",
     "jshint": "2.3.0",
     "mocha": "2.3.4",
-    "sinon": "1.17.2",
-    "chai-as-promised": "5.3.0"
+    "sinon": "1.17.2"
   },
   "bin": {
     "zlo": "./bin/zlo"
   },
   "scripts": {
     "test": "node ./node_modules/mocha/bin/mocha test/common"
-  }
+  },
+  "main": "index.js",
+  "license": "MIT"
 }
