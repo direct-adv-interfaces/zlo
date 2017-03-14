@@ -1,6 +1,6 @@
 {
   "name": "zlo",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "author": "heliarian",
   "description": "is a command line utility for caching dependencies",
   "repository": "https://github.com/heliarian/zlo.git",
