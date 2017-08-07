@@ -14,6 +14,8 @@
 
 `node zlo --dev` - сборка в dev-режиме
 
+`node zlo --disable-svn` - сборка без кэширования в svn
+
 `npm test`  - запуск тестов
 
 
@@ -28,7 +30,6 @@
 
     {
          "localCachePath": "local-dependencies",
-         "disableSvnCache": true,
          "svnCachePath": "svn+ssh://svn.my-svn.ru/dependencies",
          "useYarn": false,
          "loadTimeout": 10000,
@@ -47,8 +48,6 @@
 
 ####`localCachePath `
 папка для хранения локального кэша
-####`disableSvnCache`
-запретить кэширование в svn
 ####`svnCachePath`
 путь к svn-репозиторию в котором хранится кэш
 ####`loadTimeout`
