@@ -22,7 +22,8 @@ var Zlo = require('../lib/zlo'),
         useFakeTimers: true
     }),
     zlo,
-    finishStub;
+    finishStub,
+    removeOldDependenciesStub;
 
 chai.use(chaiAsPromised);
 
@@ -31,6 +32,7 @@ describe('Вывод ошибок при ошибках входных данн�
         endSuccessStub;
 
     beforeEach(function() {
+        removeOldDependenciesStub = sandbox.stub(Zlo.prototype, '_removeOldDependencies', function() {});
         endFailStub = sandbox.stub(Zlo.prototype, '_endFail', function() {});
         endSuccessStub = sandbox.stub(Zlo.prototype, '_endSuccess', function() {});
     });
@@ -61,7 +63,9 @@ describe('Вывод ошибок при ошибках входных данн�
 
 
 describe('Загрузка зависимостей', function() {
-    beforeEach(function() {
+    function initZlo(options) {
+        options = options || {};
+
         zlo = new Zlo(
             {
                 localCachePath: 'local',
@@ -82,7 +86,7 @@ describe('Загрузка зависимостей', function() {
                     }
                 ]
             },
-            { verbose: 1, dev: false, loadTimeout: 10 });
+            { verbose: true, dev: false, loadTimeout: 10, disableSvn: options.disableSvn || false });
 
         //стабим функции, которые работают с svn и файловой системой
         sandbox.stub(Zlo.prototype, '_doCmd', function() {
@@ -96,7 +100,9 @@ describe('Загрузка зависимостей', function() {
         finishStub = sandbox.stub(Zlo.prototype, '_onLoadingFinished', function() {
             return Promise.resolve();
         });
-    });
+
+        removeOldDependenciesStub = sandbox.stub(Zlo.prototype, '_removeOldDependencies', function() {});
+    }
 
     afterEach(function() {
         zlo = undefined;
@@ -105,6 +111,7 @@ describe('Загрузка зависимостей', function() {
 
     describe('Если данные загрузились из кэша', function() {
         beforeEach(function() {
+            initZlo();
             sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
                 return Promise.resolve();
             });
@@ -114,15 +121,17 @@ describe('Загрузка зависимостей', function() {
             sandbox.restore();
         });
 
-        it('_onLoadingFinished вызовется с аргументом "local"', function() {
+        it('_onLoadingFinished вызовется с аргументом "local"', function(done) {
             return zlo.loadDependencies().then(function() {
                 expect(finishStub.calledWith('local')).to.be.true;
+                done();
             });
         });
     });
 
-    describe('Если невозможно загрузить данные из кэша', function() {
-        var svnStub;
+    describe('Если невозможно загрузить данные из кэша', function(done) {
+        var svnStub,
+            loadFromExternalStorageStub;
 
         beforeEach(function() {
             sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
@@ -130,57 +139,68 @@ describe('Загрузка зависимостей', function() {
             });
         });
 
-        afterEach(function() {
-            sandbox.restore();
-        });
-
-        it('Пытаемся загрузить данные из svn', function() {
+        it('Пытаемся загрузить данные из svn если не передано disableSvn в опциях', function(done) {
+            initZlo();
             svnStub = sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
                 return Promise.resolve();
             });
 
             return zlo.loadDependencies().then(function() {
                 expect(svnStub.called).to.be.true;
+                done();
+            });
+        });
+
+        it('Сразу пытаемся загрузить данные из npm если передано disableSvn в опциях', function(done) {
+            initZlo({ disableSvn: true });
+            loadFromExternalStorageStub = sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
+                return Promise.resolve();
+            });
+
+            svnStub = sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
+                return Promise.resolve();
+            });
+
+            return zlo.loadDependencies().then(function() {
+                expect(svnStub.called).to.be.false;
+                expect(loadFromExternalStorageStub.called).to.be.true;
+                done();
             });
         });
 
         describe('Если данные из svn загрузились', function() {
             beforeEach(function() {
+                initZlo();
                 sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
                     return Promise.resolve();
                 });
             });
 
-            afterEach(function() {
-                sandbox.restore();
-            });
-
-            it('_onLoadingFinished вызовется с аргументом "svn"', function() {
+            it('_onLoadingFinished вызовется с аргументом "svn"', function(done) {
 
                 return zlo.loadDependencies().then(function() {
                     expect(finishStub.calledWith('svn')).to.be.true;
+                    done();
                 });
             });
         });
 
         describe('Если данные из svn не загрузились', function() {
             beforeEach(function() {
+                initZlo();
                 sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
                     return Promise.reject();
                 });
             });
 
-            afterEach(function() {
-                sandbox.restore();
-            });
-
-            it('Пытаемся загрузить данные из npm', function() {
+            it('Пытаемся загрузить данные из npm', function(done) {
                 var npmStub = sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
                     return Promise.resolve();
                 });
 
                 return zlo.loadDependencies().then(function() {
                     expect(npmStub.called).to.be.true;
+                    done();
                 });
             });
 
@@ -191,13 +211,10 @@ describe('Загрузка зависимостей', function() {
                     });
                 });
 
-                afterEach(function() {
-                    sandbox.restore();
-                });
-
-                it('_onLoadingFinished вызовется с аргументом "npm"', function() {
+                it('_onLoadingFinished вызовется с аргументом "npm"', function(done) {
                     return zlo.loadDependencies().then(function() {
                         expect(finishStub.calledWith('npm')).to.be.true;
+                        done();
                     });
                 });
             });
@@ -210,16 +227,13 @@ describe('Загрузка зависимостей', function() {
                         return Promise.reject();
                     });
 
-                    endFailStub = sandbox.stub(Zlo.prototype, '_endFail', function() {});
+                    endFailStub = sandbox.stub(Zlo.prototype, '_endFail', function(data) {});
                 });
 
-                afterEach(function() {
-                    sandbox.restore();
-                });
-
-                it('Показываем ошибку', function() {
+                it('Показываем ошибку', function(done) {
                     return zlo.loadDependencies().then(function() {
                         expect(endFailStub.calledWith('Dependencies loading error')).to.be.true;
+                        done();
                     });
                 })
             })

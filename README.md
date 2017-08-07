@@ -28,6 +28,7 @@
 
     {
          "localCachePath": "local-dependencies",
+         "disableSvnCache": true,
          "svnCachePath": "svn+ssh://svn.my-svn.ru/dependencies",
          "useYarn": false,
          "loadTimeout": 10000,
@@ -46,7 +47,9 @@
 
 ####`localCachePath `
 папка для хранения локального кэша
-####`svnCachePath` 
+####`disableSvnCache`
+запретить кэширование в svn
+####`svnCachePath`
 путь к svn-репозиторию в котором хранится кэш
 ####`loadTimeout`
 максимально-допустимое время установки зависимостей по истечению которого установка прекращается
@@ -82,7 +85,7 @@
     }
 ```
 
-Аналогично: удалить все зависимости во всех кэшах (включая текущую, если она существует) 
+Аналогично: удалить все зависимости во всех кэшах (включая текущую, если она существует)
 
 ```javascript
     "killAll": true
