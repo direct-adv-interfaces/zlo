@@ -32,9 +32,9 @@ describe('Вывод ошибок при ошибках входных данн�
         endSuccessStub;
 
     beforeEach(function() {
-        removeOldDependenciesStub = sandbox.stub(Zlo.prototype, '_removeOldDependencies', function() {});
-        endFailStub = sandbox.stub(Zlo.prototype, '_endFail', function() {});
-        endSuccessStub = sandbox.stub(Zlo.prototype, '_endSuccess', function() {});
+        removeOldDependenciesStub = sandbox.stub(Zlo.prototype, '_removeOldDependencies').callsFake(function() {});
+        endFailStub = sandbox.stub(Zlo.prototype, '_endFail').callsFake(function() {});
+        endSuccessStub = sandbox.stub(Zlo.prototype, '_endSuccess').callsFake(function() {});
     });
 
     afterEach(function() {
@@ -89,19 +89,13 @@ describe('Загрузка зависимостей', function() {
             { verbose: true, dev: false, loadTimeout: 10, disableSvn: options.disableSvn || false });
 
         //стабим функции, которые работают с svn и файловой системой
-        sandbox.stub(Zlo.prototype, '_doCmd', function() {
-            return Promise.resolve();
-        });
+        sandbox.stub(Zlo.prototype, '_doCmd').resolves();
 
-        sandbox.stub(Zlo.prototype, '_doCleanup', function() {
-            return Promise.resolve();
-        });
+        sandbox.stub(Zlo.prototype, '_doCleanup').resolves();
 
-        finishStub = sandbox.stub(Zlo.prototype, '_onLoadingFinished', function() {
-            return Promise.resolve();
-        });
+        finishStub = sandbox.stub(Zlo.prototype, '_onLoadingFinished').resolves();
 
-        removeOldDependenciesStub = sandbox.stub(Zlo.prototype, '_removeOldDependencies', function() {});
+        removeOldDependenciesStub = sandbox.stub(Zlo.prototype, '_removeOldDependencies').callsFake(function() {});
     }
 
     afterEach(function() {
@@ -112,19 +106,16 @@ describe('Загрузка зависимостей', function() {
     describe('Если данные загрузились из кэша', function() {
         beforeEach(function() {
             initZlo();
-            sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
-                return Promise.resolve();
-            });
+            sandbox.stub(Zlo.prototype, '_loadFromLocalCache').resolves();
         });
 
         afterEach(function() {
             sandbox.restore();
         });
 
-        it('_onLoadingFinished вызовется с аргументом "local"', function(done) {
+        it('_onLoadingFinished вызовется с аргументом "local"', function() {
             return zlo.loadDependencies().then(function() {
                 expect(finishStub.calledWith('local')).to.be.true;
-                done();
             });
         });
     });
@@ -134,53 +125,40 @@ describe('Загрузка зависимостей', function() {
             loadFromExternalStorageStub;
 
         beforeEach(function() {
-            sandbox.stub(Zlo.prototype, '_loadFromLocalCache', function() {
-                return Promise.reject();
-            });
+            sandbox.stub(Zlo.prototype, '_loadFromLocalCache').rejects('Error');
         });
 
-        it('Пытаемся загрузить данные из svn если не передано disableSvn в опциях', function(done) {
+        it('Пытаемся загрузить данные из svn если не передано disableSvn в опциях', function() {
             initZlo();
-            svnStub = sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
-                return Promise.resolve();
-            });
+            svnStub = sandbox.stub(Zlo.prototype, '_loadFromSVNCache').resolves();
 
             return zlo.loadDependencies().then(function() {
                 expect(svnStub.called).to.be.true;
-                done();
             });
         });
 
-        it('Сразу пытаемся загрузить данные из npm если передано disableSvn в опциях', function(done) {
+        it('Сразу пытаемся загрузить данные из npm если передано disableSvn в опциях', function() {
             initZlo({ disableSvn: true });
-            loadFromExternalStorageStub = sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
-                return Promise.resolve();
-            });
+            loadFromExternalStorageStub = sandbox.stub(Zlo.prototype, '_loadFromExternalStorage').resolves();
 
-            svnStub = sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
-                return Promise.resolve();
-            });
+            svnStub = sandbox.stub(Zlo.prototype, '_loadFromSVNCache').resolves();
 
             return zlo.loadDependencies().then(function() {
                 expect(svnStub.called).to.be.false;
                 expect(loadFromExternalStorageStub.called).to.be.true;
-                done();
             });
         });
 
         describe('Если данные из svn загрузились', function() {
             beforeEach(function() {
                 initZlo();
-                sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
-                    return Promise.resolve();
-                });
+                sandbox.stub(Zlo.prototype, '_loadFromSVNCache').resolves();
             });
 
-            it('_onLoadingFinished вызовется с аргументом "svn"', function(done) {
+            it('_onLoadingFinished вызовется с аргументом "svn"', function() {
 
                 return zlo.loadDependencies().then(function() {
                     expect(finishStub.calledWith('svn')).to.be.true;
-                    done();
                 });
             });
         });
@@ -188,33 +166,25 @@ describe('Загрузка зависимостей', function() {
         describe('Если данные из svn не загрузились', function() {
             beforeEach(function() {
                 initZlo();
-                sandbox.stub(Zlo.prototype, '_loadFromSVNCache', function() {
-                    return Promise.reject();
-                });
+                sandbox.stub(Zlo.prototype, '_loadFromSVNCache').rejects('Error');
             });
 
-            it('Пытаемся загрузить данные из npm', function(done) {
-                var npmStub = sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
-                    return Promise.resolve();
-                });
+            it('Пытаемся загрузить данные из npm', function() {
+                var npmStub = sandbox.stub(Zlo.prototype, '_loadFromExternalStorage').resolves();
 
                 return zlo.loadDependencies().then(function() {
                     expect(npmStub.called).to.be.true;
-                    done();
                 });
             });
 
             describe('Если данные из npm загрузились', function() {
                 beforeEach(function() {
-                    sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
-                        return Promise.resolve();
-                    });
+                    sandbox.stub(Zlo.prototype, '_loadFromExternalStorage').resolves();
                 });
 
-                it('_onLoadingFinished вызовется с аргументом "npm"', function(done) {
+                it('_onLoadingFinished вызовется с аргументом "npm"', function() {
                     return zlo.loadDependencies().then(function() {
                         expect(finishStub.calledWith('npm')).to.be.true;
-                        done();
                     });
                 });
             });
@@ -223,17 +193,14 @@ describe('Загрузка зависимостей', function() {
                 var endFailStub;
 
                 beforeEach(function() {
-                    sandbox.stub(Zlo.prototype, '_loadFromExternalStorage', function() {
-                        return Promise.reject();
-                    });
+                    sandbox.stub(Zlo.prototype, '_loadFromExternalStorage').rejects();
 
-                    endFailStub = sandbox.stub(Zlo.prototype, '_endFail', function(data) {});
+                    endFailStub = sandbox.stub(Zlo.prototype, '_endFail').callsFake(function(data) {});
                 });
 
-                it('Показываем ошибку', function(done) {
+                it('Показываем ошибку', function() {
                     return zlo.loadDependencies().then(function() {
                         expect(endFailStub.calledWith('Dependencies loading error')).to.be.true;
-                        done();
                     });
                 })
             })
