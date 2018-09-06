@@ -1,6 +1,6 @@
 {
   "name": "zlo",
-  "version": "0.5.13",
+  "version": "0.5.12",
   "author": "heliarian",
   "description": "is a command line utility for caching dependencies",
   "repository": "https://github.com/heliarian/zlo.git",
@@ -16,6 +16,13 @@
     "tracer": "0.8.3",
     "xml2js": "0.4.16",
     "yarn": "v1.9.4"
+  },
+  "devDependencies": {
+    "chai": "3.4.1",
+    "chai-as-promised": "5.3.0",
+    "jshint": "2.3.0",
+    "mocha": "5.2.0",
+    "sinon": "6.2.0"
   },
   "bin": {
     "zlo": "./bin/zlo"
