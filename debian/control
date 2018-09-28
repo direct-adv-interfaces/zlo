@@ -1,0 +1,11 @@
+Source: yandex-du-zlo
+Section: misc
+Priority: extra
+Maintainer: Vera Nekhaeva <heliarian@yandex-team.ru>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.2
+
+Package: yandex-du-zlo
+Architecture: all
+Description: zlo, Direct frontend dependencies cache
+ zlo, Direct frontend dependencies cache
