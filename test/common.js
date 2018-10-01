@@ -1,7 +1,7 @@
 global.chai = require('chai');
 global.sinon = require('sinon');
 global.expect = global.chai.expect;
-var Zlo = require('../lib/zlo'),
+var Zlo = require('../usr/lib/zlo'),
     chaiAsPromised = require('chai-as-promised'),
     colors = require('colors'),
     logger = require('tracer').colorConsole({
@@ -207,6 +207,3 @@ describe('Загрузка зависимостей', function() {
         });
     });
 });
-
-
-

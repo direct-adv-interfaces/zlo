@@ -1,6 +1,6 @@
 {
   "name": "zlo",
-  "version": "0.5.14",
+  "version": "0.5.16",
   "author": "heliarian",
   "description": "is a command line utility for caching dependencies",
   "repository": "https://github.com/heliarian/zlo.git",
@@ -28,7 +28,8 @@
     "zlo": "./bin/zlo"
   },
   "scripts": {
-    "test": "node ./node_modules/mocha/bin/mocha test/common"
+    "test": "node ./node_modules/mocha/bin/mocha test/common",
+    "build": "./scripts/build.sh && debosh --dirty"
   },
   "main": "index.js",
   "license": "MIT"
